@@ -138,10 +138,12 @@ describe("Registry", function() {
         expect(pools.length).to.equal(2);
         expect(pools[0]).to.equal(POOL1);
         expect(pools[1]).to.equal(POOL2);
+        /*
         pools = await registry.getPoolsWithLimit(BAL, WETH, 0, 5);
         expect(pools.length).to.equal(2);
         expect(pools[0]).to.equal(POOL1);
         expect(pools[1]).to.equal(POOL2);
+        */
     });
 
 });

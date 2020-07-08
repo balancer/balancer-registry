@@ -8,7 +8,6 @@ const verbose = process.env.VERBOSE;
 
 describe('ExchangeProxy', async () => {
     const ExchangeProxy = await ethers.getContractFactory("ExchangeProxy");
-    const TTokenFactory = await ethers.getContractFactory('TToken');
     const BFactory = await ethers.getContractFactory('BFactory');
     const BPool = await ethers.getContractFactory('BPool');
     const Weth9 = await ethers.getContractFactory('WETH9');

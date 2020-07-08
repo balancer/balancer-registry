@@ -46,7 +46,7 @@ contract BRegistry {
     );
 
     uint private constant BONE = 10**18;
-    uint private constant MIN_SWAP_FEE = BONE / 100;
+    uint private constant MIN_SWAP_FEE = (3 * BONE) / 100;
 
     mapping(bytes32 => SortedPools) private _pools;
     mapping(address => mapping(bytes32 => PoolPairInfo)) private _infos;
