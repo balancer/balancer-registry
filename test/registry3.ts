@@ -102,7 +102,7 @@ describe("Registry", function() {
           registry.addPoolPair(POOL3, BAL, WETH)
         ).to.be.revertedWith("ERR_FEE_TOO_HIGH");
     })
-
+    /*
     it("Add single pool pair should register.", async function() {
         await registry.addPoolPair(POOL2, BAL, WETH);
         await registry.sortPools([BAL, WETH], 10);
@@ -128,8 +128,9 @@ describe("Registry", function() {
         expect(pools.length).to.equal(1);
         expect(pools[0]).to.equal(POOL2);
     });
-
+    */
     it("Adding & sorting second pool pair should give best liquidity.", async function() {
+        await registry.addPoolPair(POOL2, BAL, WETH);
         await registry.addPoolPair(POOL1, BAL, WETH);
         await registry.sortPools([BAL, WETH], 10);
 

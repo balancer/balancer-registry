@@ -104,33 +104,33 @@ describe("Registry", function() {
     })
 
     it("Add single pool pair should register.", async function() {
-        await registry.addPoolPair(POOL2, BAL, WETH);
+        await registry.addPoolPair(POOL1, BAL, WETH);
         await registry.sortPools([BAL, WETH], 10);
 
         let pools = await registry.getBestPoolsWithLimit(BAL, WETH, 5);
         console.log(pools)
         expect(pools.length).to.equal(1);
-        expect(pools[0]).to.equal(POOL2);
+        expect(pools[0]).to.equal(POOL1);
         pools = await registry.getPoolsWithLimit(BAL, WETH, 0, 5);
         expect(pools.length).to.equal(1);
-        expect(pools[0]).to.equal(POOL2);
+        expect(pools[0]).to.equal(POOL1);
     });
 
     it("Adding same pool pair should not add again.", async function() {
-        await registry.addPoolPair(POOL2, BAL, WETH);
+        await registry.addPoolPair(POOL1, BAL, WETH);
         await registry.sortPools([BAL, WETH], 10);
 
         let pools = await registry.getBestPoolsWithLimit(BAL, WETH, 5);
         console.log(pools)
         expect(pools.length).to.equal(1);
-        expect(pools[0]).to.equal(POOL2);
+        expect(pools[0]).to.equal(POOL1);
         pools = await registry.getPoolsWithLimit(BAL, WETH, 0, 5);
         expect(pools.length).to.equal(1);
-        expect(pools[0]).to.equal(POOL2);
+        expect(pools[0]).to.equal(POOL1);
     });
 
     it("Adding & sorting second pool pair should give best liquidity.", async function() {
-        await registry.addPoolPair(POOL1, BAL, WETH);
+        await registry.addPoolPair(POOL2, BAL, WETH);
         await registry.sortPools([BAL, WETH], 10);
 
         let pools = await registry.getBestPoolsWithLimit(BAL, WETH, 5);

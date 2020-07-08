@@ -1,6 +1,6 @@
 pragma solidity 0.5.12;
 
-// import "@nomiclabs/buidler/console.sol";
+import "@nomiclabs/buidler/console.sol";
 
 import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -150,7 +150,7 @@ contract BRegistry {
 
                 bytes32 indices = _buildSortIndices(invs);
 
-                // console.logBytes32(indices);
+                console.logBytes32(indices);
 
                 if (indices != _pools[key].indices) {
                     emit IndicesUpdated(
