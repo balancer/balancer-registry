@@ -1,3 +1,4 @@
+import { assert } from 'chai';
 import { ethers, ethereum } from "@nomiclabs/buidler";
 import { Signer, utils } from "ethers";
 const Decimal = require('decimal.js');
@@ -7,11 +8,11 @@ const verbose = process.env.VERBOSE;
 
 describe('ExchangeProxy', async () => {
     const ExchangeProxy = await ethers.getContractFactory("ExchangeProxy");
-    const TToken = await ethers.getContractFactory('TToken');
-    const TTokenFactory = await ethers.getContractFactory('TTokenFactory');
+    const TTokenFactory = await ethers.getContractFactory('TToken');
     const BFactory = await ethers.getContractFactory('BFactory');
     const BPool = await ethers.getContractFactory('BPool');
     const Weth9 = await ethers.getContractFactory('WETH9');
+
     const [admin, nonAdmin] = await ethers.getSigners();
     const toWei = utils.parseEther;
     const fromWei = utils.formatEther;
@@ -21,9 +22,9 @@ describe('ExchangeProxy', async () => {
         let factory: any;
         let proxy: any;
         let PROXY: string;
-        let pool1: Contract;
-        let pool2: string;
-        let pool3: string;
+        let pool1: any;
+        let pool2: any;
+        let pool3: any;
         let POOL1: any;
         let POOL2: any;
         let POOL3: any;
@@ -37,12 +38,11 @@ describe('ExchangeProxy', async () => {
 
         before(async () => {
 
-            proxy = await ExchangeProxy.deploy();
-            PROXY = proxy.address;
-
             //weth = await Weth9.deployed();
+
             const TokenFactory = await ethers.getContractFactory("TToken");
-            weth = await TokenFactory.deploy('Wrapped Ether', 'WETH', 18);
+
+            weth = await Weth9.deploy();
             dai = await TokenFactory.deploy('Dai Stablecoin', 'DAI', 18);
             mkr = await TokenFactory.deploy('Maker', 'MKR', 18);
 
@@ -51,14 +51,18 @@ describe('ExchangeProxy', async () => {
             DAI = dai.address;
             MKR = mkr.address;
 
+            proxy = await ExchangeProxy.deploy(WETH);
+            await proxy.deployed();
+
+            PROXY = proxy.address;
 
             await weth.deposit({ value: toWei('25') });
-            await dai.mint(admin, toWei('10000'));
-            await mkr.mint(admin, toWei('20'));
+            await dai.mint(await admin.getAddress(), toWei('10000'));
+            await mkr.mint(await admin.getAddress(), toWei('20'));
 
-            await weth.deposit({ from: nonAdmin, value: toWei('25') });
-            await dai.mint(nonAdmin, toWei('10000'));
-            await mkr.mint(nonAdmin, toWei('20'));
+            await weth.connect(nonAdmin).deposit({ from: await nonAdmin.getAddress(), value: toWei('25') });
+            await dai.mint(await nonAdmin.getAddress(), toWei('10000'));
+            await mkr.mint(await nonAdmin.getAddress(), toWei('20'));
 
             factory = await BFactory.deploy();
 
@@ -74,9 +78,13 @@ describe('ExchangeProxy', async () => {
             await factory.newBPool();
             pool3 = await ethers.getContractAt("BPool", POOL3)
 
-            await weth.approve(PROXY, MAX, { from: nonAdmin });
-            await dai.approve(PROXY, MAX, { from: nonAdmin });
-            await mkr.approve(PROXY, MAX, { from: nonAdmin });
+            await dai.connect(nonAdmin).approve(PROXY, MAX, { from: await nonAdmin.getAddress() });
+            await mkr.connect(nonAdmin).approve(PROXY, MAX, { from: await nonAdmin.getAddress() });
+            await weth.connect(nonAdmin).approve(PROXY, MAX, { from: await nonAdmin.getAddress() });
+
+            await dai.approve(PROXY, MAX);
+            await mkr.approve(PROXY, MAX);
+            await weth.approve(PROXY, MAX);
 
             await weth.approve(POOL1, MAX);
             await dai.approve(POOL1, MAX);
@@ -92,16 +100,15 @@ describe('ExchangeProxy', async () => {
 
             await pool1.bind(WETH, toWei('6'), toWei('5'));
             await pool1.bind(DAI, toWei('1200'), toWei('5'));
-            await pool1.finalize(toWei('100'));
+            await pool1.finalize();
 
             await pool2.bind(WETH, toWei('1'), toWei('10'));
             await pool2.bind(MKR, toWei('2'), toWei('20'));
-            await pool2.finalize(toWei('100'));
+            await pool2.finalize();
 
             await pool3.bind(DAI, toWei('1000'), toWei('5'));
             await pool3.bind(MKR, toWei('5'), toWei('5'));
-
-            await pool3.finalize(toWei('100'));
+            await pool3.finalize();
         });
 
         it('multihopBatchSwapExactIn dry', async () => {
@@ -147,12 +154,11 @@ describe('ExchangeProxy', async () => {
 
             // console.log(swapSequences);
 
-            const totalAmountOut = await proxy.multihopBatchSwapExactIn.call(
-                swapSequences, WETH, DAI, toWei('1'), toWei('0'),
-                { from: nonAdmin },
+            const totalAmountOut = await proxy.callStatic.multihopBatchSwapExactIn(
+                swapSequences, WETH, DAI, toWei('1'), toWei('0')
             );
 
-            // console.log(totalAmountOut.toString());
+            console.log(totalAmountOut.toString());
 
             const expectedTotalOut = pool1Out.plus(pool3Out);
 
@@ -209,9 +215,8 @@ describe('ExchangeProxy', async () => {
                 ],
             ];
 
-            const totalAmountIn = await proxy.multihopBatchSwapExactOut.call(
-                swapSequences, WETH, DAI, toWei('3'),
-                { from: nonAdmin },
+            const totalAmountIn = await proxy.callStatic.multihopBatchSwapExactOut(
+                swapSequences, WETH, DAI, toWei('3')
             );
 
             // console.log(totalAmountIn.toString());
@@ -271,9 +276,12 @@ describe('ExchangeProxy', async () => {
 
             // console.log(swapSequences);
 
-            const totalAmountOut = await proxy.multihopBatchSwapExactIn.call(
+            const totalAmountOut = await proxy.callStatic.multihopBatchSwapExactIn(
                 swapSequences, ETH, DAI, toWei('2'), toWei('0'),
-                { from: nonAdmin, value: toWei('2') },
+                {
+                  gasPrice: 0,
+                  value: toWei('2')
+                }
             );
 
             console.log(totalAmountOut.toString());
@@ -334,9 +342,9 @@ describe('ExchangeProxy', async () => {
 
             // console.log(swapSequences);
 
-            const totalAmountOut = await proxy.multihopBatchSwapExactIn.call(
+            const totalAmountOut = await proxy.connect(nonAdmin).callStatic.multihopBatchSwapExactIn(
                 swapSequences, DAI, ETH, toWei('100'), toWei('0.1'),
-                { from: nonAdmin },
+                { from: await nonAdmin.getAddress() },
             );
 
             // console.log(totalAmountOut.toString());
@@ -396,9 +404,9 @@ describe('ExchangeProxy', async () => {
                 ],
             ];
 
-            const totalAmountIn = await proxy.multihopBatchSwapExactOut.call(
+            const totalAmountIn = await proxy.connect(nonAdmin).callStatic.multihopBatchSwapExactOut(
                 swapSequences, ETH, DAI, toWei('3'),
-                { from: nonAdmin, value: toWei('3') },
+                { from: await nonAdmin.getAddress(), value: toWei('3') },
             );
 
             // console.log(totalAmountIn.toString());
@@ -416,6 +424,7 @@ describe('ExchangeProxy', async () => {
             assert.isAtMost(relDif.toNumber(), (errorDelta * swapSequences.length));
 
         });
+
 
         it('multihopBatchEthOutSwapExactOut dry', async () => {
             const swapFee = fromWei(await pool1.getSwapFee());
@@ -458,14 +467,8 @@ describe('ExchangeProxy', async () => {
             ];
 
 
-            const totalAmountIn = await proxy.multihopBatchSwapExactOut.call(
-                swapSequences, DAI, ETH, toWei('50'),
-                { from: nonAdmin },
-            );
-
-            await proxy.multihopBatchSwapExactOut(
-                swapSequences, DAI, ETH, toWei('50'),
-                { from: nonAdmin },
+            const totalAmountIn = await proxy.callStatic.multihopBatchSwapExactOut(
+                swapSequences, DAI, ETH, toWei('50')
             );
 
             const expectedTotalIn = pool1In.plus(pool3In);
@@ -480,6 +483,7 @@ describe('ExchangeProxy', async () => {
 
             assert.isAtMost(relDif.toNumber(), (errorDelta * swapSequences.length));
         });
+
     });
+
 });
-*/
