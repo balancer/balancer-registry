@@ -3,7 +3,7 @@ import { ethers, ethereum } from "@nomiclabs/buidler";
 import { Signer, utils } from "ethers";
 const verbose = process.env.VERBOSE;
 
-describe('SmartOrderRouter', function(){
+describe('ExchangeProxy Smart Swaps', function(){
     const toWei = utils.parseEther;
     const fromWei = utils.formatEther;
     const MAX = ethers.constants.MaxUint256;

@@ -1,4 +1,4 @@
-import { assert } from 'chai';
+import { assert, expect } from 'chai';
 import { ethers, ethereum } from "@nomiclabs/buidler";
 import { Signer, utils } from "ethers";
 const verbose = process.env.VERBOSE;
@@ -19,6 +19,10 @@ describe('SmartOrderRouter', function(){
     let mkr: any;
     let _POOLS: any[] =[];
     let _pools: any[] =[];
+    let adminSigner: any;
+    let nonAdminSigner: any;
+    let admin: string;
+    let nonAdmin: string;
 
     before(async () => {
         const BRegistry = await ethers.getContractFactory('BRegistry');
@@ -26,8 +30,9 @@ describe('SmartOrderRouter', function(){
         const BFactory = await ethers.getContractFactory('BFactory');
         const BPool = await ethers.getContractFactory('BPool');
         const TToken = await ethers.getContractFactory('TToken');
-        const [adminSigner] = await ethers.getSigners();
-        const admin = await adminSigner.getAddress();
+        [adminSigner, nonAdminSigner] = await ethers.getSigners();
+        admin = await adminSigner.getAddress();
+        nonAdmin = await nonAdminSigner.getAddress();
         factory = await BFactory.deploy();
         await factory.deployed();
 
@@ -110,6 +115,21 @@ describe('SmartOrderRouter', function(){
         await registry.addPools([_POOLS[1], _POOLS[2], _POOLS[3], _POOLS[4]], MKR, WETH);
         await registry.sortPools([MKR, WETH], 10);
     });
+
+    it('Should not allow non-controller to change Registry Address.', async () => {
+        await expect(
+          smartOrderRouter.connect(nonAdminSigner).setRegistryAddress('0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2')
+        ).to.be.revertedWith("ERR_NOT_CONTROLLER");
+    })
+
+    it('Controller can change Registry Address.', async () => {
+        let regAddr = await smartOrderRouter.getRegistryAddress();
+        expect(regAddr).to.equal(registry.address);
+        await smartOrderRouter.setRegistryAddress('0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2');
+        regAddr = await smartOrderRouter.getRegistryAddress();
+        expect(regAddr).to.equal('0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2');
+        await smartOrderRouter.setRegistryAddress(registry.address);
+    })
 
     it('SimplifiedCalcSplit swapExactOut, input_amount = 100,000', async () => {
         // !!!!!!! getBestPoolsWithLimit should probably be used (also in Contract)

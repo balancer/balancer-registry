@@ -59,10 +59,26 @@ contract SmartOrderRouter is BNum {
         uint    maxPrice;
     }
 
-    RegistryInterface registry;
+    address private _controller;
+    address private _registryAddress;
 
-	constructor(address _registry) public {
-        registry = RegistryInterface(_registry);
+	  constructor(address registryAddress) public {
+        _controller = msg.sender;
+        _registryAddress = registryAddress;
+    }
+
+    function setRegistryAddress(address registryAddress)
+        external
+    {
+        require(msg.sender == _controller, "ERR_NOT_CONTROLLER");
+        _registryAddress = registryAddress;
+    }
+
+    function getRegistryAddress()
+        external view
+        returns (address)
+    {
+        return _registryAddress;
     }
 
     function getPoolData(
@@ -108,7 +124,7 @@ contract SmartOrderRouter is BNum {
         public view
         returns (Swap[] memory swaps, uint totalOutput)
     {
-        address[] memory poolAddresses = registry.getPoolsWithLimit(tokenIn, tokenOut, 0, nPools);
+        address[] memory poolAddresses = RegistryInterface(_registryAddress).getPoolsWithLimit(tokenIn, tokenOut, 0, nPools);
         Pool[] memory pools = new Pool[](poolAddresses.length);
         for (uint i = 0; i < poolAddresses.length; i++) {
             pools[i] = getPoolData(tokenIn, tokenOut, poolAddresses[i]);
