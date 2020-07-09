@@ -17,8 +17,11 @@ describe('SmartOrderRouter', function(){
     let MKR: string;
     let weth: any;
     let mkr: any;
+    let proxy: any;
     let _POOLS: any[] =[];
     let _pools: any[] =[];
+    let SOR: string;
+    let PROXY: string;
 
     before(async () => {
         const BRegistry = await ethers.getContractFactory('BRegistry');
@@ -26,6 +29,8 @@ describe('SmartOrderRouter', function(){
         const BFactory = await ethers.getContractFactory('BFactory');
         const BPool = await ethers.getContractFactory('BPool');
         const TToken = await ethers.getContractFactory('TToken');
+        const ExchangeProxy = await ethers.getContractFactory("ExchangeProxyMultihop");
+        const Weth9 = await ethers.getContractFactory('WETH9');
         const [adminSigner] = await ethers.getSigners();
         const admin = await adminSigner.getAddress();
         factory = await BFactory.deploy();
@@ -36,6 +41,7 @@ describe('SmartOrderRouter', function(){
 
         smartOrderRouter = await SmartOrderRouter.deploy(registry.address);
         await smartOrderRouter.deployed();
+        SOR = smartOrderRouter.address;
 
         weth = await TToken.deploy('Wrapped Ether', 'WETH', 18);
         mkr = await TToken.deploy('Maker', 'MKR', 18);
@@ -44,6 +50,14 @@ describe('SmartOrderRouter', function(){
 
         WETH = weth.address;
         MKR = mkr.address;
+
+        let weth9 = await Weth9.deploy();
+        proxy = await ExchangeProxy.deploy(weth9.address);
+        await proxy.deployed();
+        PROXY = proxy.address;
+        await weth.approve(PROXY, MAX);
+        await mkr.approve(PROXY, MAX);
+
 
         // Admin balances
         await weth.mint(admin, toWei('1000000000000000000000'));
@@ -122,17 +136,7 @@ describe('SmartOrderRouter', function(){
         // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
         // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
         let result = await smartOrderRouter.viewSplit(false, MKR, WETH, toWei('100000'), 4); // Sell 100000 WETH for MKR
-        /*
-        Returns:
-        Array of swaps:
-            struct Swap {
-                address pool;
-                uint    tokenInParam; // tokenInAmount / maxAmountIn / limitAmountIn
-                uint    tokenOutParam; // minAmountOut / tokenAmountOut / limitAmountOut
-                uint    maxPrice;
-            }
-        totalOutput value
-        */
+
         // result.swaps[0].tokenOutParam.toString() is Same as: result['swaps'][0][2]
         assert.equal(result.swaps[0].tokenOutParam.toString(), "34681223095510744100000");
         assert.equal(result.swaps[1].tokenOutParam.toString(), "26215324499553495700000");
@@ -140,11 +144,15 @@ describe('SmartOrderRouter', function(){
         assert.equal(result.swaps[3].tokenOutParam.toString(), "13164412546060651900000");
         assert.equal(result.totalOutput.toString(), "1434955757400869016687020");
 
-        // // pools should be in right order
-        // assert.equal(result['swaps'][0][0].pool.toString(),pools[3]);
-        // assert.equal(result['swaps'][1][0].pool.toString(),pools[2]);
-        // assert.equal(result['swaps'][2][0].pool.toString(),pools[1]);
-        // assert.equal(result['swaps'][3][0].pool.toString(),pools[0]);
+        const totalAmountIn = toWei('100000');
+        const numberPools = toWei('4');
+
+        const totalAmountOut = await proxy.callStatic.smartSwapExactOut(
+            SOR, MKR, WETH, totalAmountIn, numberPools
+        );
+
+        console.log(result.totalOutput.toString())
+        console.log(totalAmountOut.toString())
     });
 
     it('SimplifiedCalcSplit swapExactIn, input_amount = 10,000', async () => {
@@ -156,10 +164,10 @@ describe('SmartOrderRouter', function(){
         // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
         // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
         let result = await smartOrderRouter.viewSplit(true, MKR, WETH, toWei('10000'), 4); // Sell 100000 WETH for MKR
-        console.log("totalOutput: "+result['totalOutput'].toString());
+        console.log("totalOutput: " + result['totalOutput'].toString());
         // // Split amounts should be correct:
         // console.log(result[0].toString());
-        console.log("totalOutput: "+result[1].toString());
+        console.log("totalOutput: " + result[1].toString());
         // console.log(JSON.stringify(result))
         assert.equal(result['swaps'][0][1].toString(),"3468122309551074410000");
         assert.equal(result['swaps'][1][1].toString(),"2621532449955349570000");
@@ -171,5 +179,14 @@ describe('SmartOrderRouter', function(){
         // assert.equal(result['swaps'][0][1].pool.toString(),pools[2]);
         // assert.equal(result['swaps'][0][2].pool.toString(),pools[1]);
         // assert.equal(result['swaps'][0][3].pool.toString(),pools[0]);
+
+        const totalAmountIn = toWei('10000');
+        const numberPools = toWei('4');
+
+        const totalAmountOut = await proxy.callStatic.smartSwapExactIn(
+            SOR, MKR, WETH, totalAmountIn, numberPools
+        );
+        console.log(result.totalOutput.toString())
+        console.log(totalAmountOut.toString())
     });
 });

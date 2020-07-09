@@ -14,6 +14,7 @@
 pragma solidity 0.5.12;
 pragma experimental ABIEncoderV2;
 
+import "@nomiclabs/buidler/console.sol";
 
 contract PoolInterface {
     function swapExactAmountIn(address, uint, address, uint, uint) external returns (uint, uint);
@@ -32,6 +33,17 @@ contract TokenInterface {
     function transferFrom(address, address, uint) public returns (bool);
     function deposit() public payable;
     function withdraw(uint) public;
+}
+
+contract SmartOrderRouterInterface {
+    struct Swap {
+        address pool;
+        uint    tokenInParam; // tokenInAmount / maxAmountIn / limitAmountIn
+        uint    tokenOutParam; // minAmountOut / tokenAmountOut / limitAmountOut
+        uint    maxPrice;
+    }
+
+    function viewSplit(bool, address, address, uint, uint) public view returns (Swap[] memory, uint);
 }
 
 contract ExchangeProxy {
@@ -226,6 +238,99 @@ contract ExchangeProxy {
         transferAll(tokenOut, getBalance(tokenOut));
         transferAll(tokenIn, getBalance(tokenIn));
 
+    }
+
+    function smartSwapExactIn(
+        address sorAddress,
+        address tokenIn,
+        address tokenOut,
+        uint totalAmountIn,
+        uint nPools
+    )
+        public payable
+        returns (uint totalAmountOut)
+    {
+        SmartOrderRouterInterface sor = SmartOrderRouterInterface(sorAddress);
+
+        SmartOrderRouterInterface.Swap[] memory swaps;
+
+        uint minTotalAmountOut;
+        (swaps, minTotalAmountOut) = sor.viewSplit(true, tokenIn, tokenOut, totalAmountIn, nPools);
+
+        Swap[][] memory swapsLocal;
+        swapsLocal = new Swap[][](swaps.length);
+
+        TokenInterface SwapTokenIn = TokenInterface(tokenIn);
+        TokenInterface SwapTokenOut = TokenInterface(tokenOut);
+
+        for (uint i = 0; i < swaps.length; i++) {
+          Swap[] memory swapSeq = new Swap[](1);
+
+          swapSeq[0] = Swap({
+                      pool: swaps[i].pool,
+                      tokenIn: tokenIn,
+                      tokenOut: tokenOut,
+                      swapAmount: swaps[i].tokenInParam,
+                      limitReturnAmount: swaps[i].tokenOutParam,
+                      maxPrice: swaps[i].maxPrice
+                  });
+
+          swapsLocal[i] = swapSeq;
+        }
+
+        totalAmountOut = multihopBatchSwapExactIn(
+            swapsLocal,
+            SwapTokenIn,
+            SwapTokenOut,
+            totalAmountIn,
+            minTotalAmountOut
+        );
+    }
+
+    function smartSwapExactOut(
+        address sorAddress,
+        address tokenIn,
+        address tokenOut,
+        uint totalAmountOut,
+        uint nPools
+    )
+        public payable
+        returns (uint totalAmountIn)
+    {
+        SmartOrderRouterInterface sor = SmartOrderRouterInterface(sorAddress);
+
+        SmartOrderRouterInterface.Swap[] memory swaps;
+
+        uint maxTotalAmountIn;
+        (swaps, maxTotalAmountIn) = sor.viewSplit(false, tokenIn, tokenOut, totalAmountOut, nPools);
+
+        Swap[][] memory swapsLocal;
+        swapsLocal = new Swap[][](swaps.length);
+
+        TokenInterface SwapTokenIn = TokenInterface(tokenIn);
+        TokenInterface SwapTokenOut = TokenInterface(tokenOut);
+
+        for (uint i = 0; i < swaps.length; i++) {
+            Swap[] memory swapSeq = new Swap[](1);
+
+            swapSeq[0] = Swap({
+                          pool: swaps[i].pool,
+                          tokenIn: tokenIn,
+                          tokenOut: tokenOut,
+                          swapAmount: swaps[i].tokenInParam,
+                          limitReturnAmount: swaps[i].tokenOutParam,
+                          maxPrice: swaps[i].maxPrice
+                      });
+
+            swapsLocal[i] = swapSeq;
+        }
+
+        totalAmountIn = multihopBatchSwapExactOut(
+            swapsLocal,
+            SwapTokenIn,
+            SwapTokenOut,
+            maxTotalAmountIn
+        );
     }
 
     function() external payable {}

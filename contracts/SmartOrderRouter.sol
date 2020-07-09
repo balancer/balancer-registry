@@ -108,7 +108,7 @@ contract SmartOrderRouter is BNum {
         public view
         returns (Swap[] memory swaps, uint totalOutput)
     {
-        address[] memory poolAddresses = registry.getPoolsWithLimit(tokenIn, tokenOut, 0, 10);
+        address[] memory poolAddresses = registry.getPoolsWithLimit(tokenIn, tokenOut, 0, nPools);
         Pool[] memory pools = new Pool[](poolAddresses.length);
         for (uint i = 0; i < poolAddresses.length; i++) {
             pools[i] = getPoolData(tokenIn, tokenOut, poolAddresses[i]);
@@ -202,7 +202,7 @@ contract SmartOrderRouter is BNum {
         returns (uint totalAmountIn)
     {
         Swap[] memory swaps;
-        (swaps,) = viewSplit(false, tokenIn, tokenOut, totalAmountOut, nPools);
+        (swaps, ) = viewSplit(false, tokenIn, tokenOut, totalAmountOut, nPools);
 
         TokenInterface TI = TokenInterface(tokenIn);
         TokenInterface TO = TokenInterface(tokenOut);

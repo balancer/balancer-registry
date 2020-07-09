@@ -74,7 +74,7 @@ describe("Registry", function() {
 
         await pool3.bind(BAL, toWei('720000'), toWei('8'));
         await pool3.bind(WETH, toWei('9200'), toWei('2'));
-        await pool3.setSwapFee(toWei('0.011'));
+        await pool3.setSwapFee(toWei('0.031'));
         await pool3.finalize();
     });
 
