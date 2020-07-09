@@ -144,15 +144,15 @@ describe('ExchangeProxy Smart Swaps', function(){
         assert.equal(result.swaps[3].tokenOutParam.toString(), "13164412546060651900000");
         assert.equal(result.totalOutput.toString(), "1434955757400869016687020");
 
-        const totalAmountIn = toWei('100000');
-        const numberPools = toWei('4');
+        const totalAmountOut = toWei('100000');
+        // const numberPools = toWei('4');
 
-        const totalAmountOut = await proxy.callStatic.smartSwapExactOut(
-            SOR, MKR, WETH, totalAmountIn, numberPools
+        const totalAmountIn = await proxy.callStatic.smartSwapExactOut(
+            SOR, MKR, WETH, totalAmountOut, 4
         );
 
         console.log(result.totalOutput.toString())
-        console.log(totalAmountOut.toString())
+        console.log(totalAmountIn.toString())
     });
 
     it('SimplifiedCalcSplit swapExactIn, input_amount = 10,000', async () => {
@@ -173,12 +173,6 @@ describe('ExchangeProxy Smart Swaps', function(){
         assert.equal(result['swaps'][1][1].toString(),"2621532449955349570000");
         assert.equal(result['swaps'][2][1].toString(),"2593903985887510830000");
         assert.equal(result['swaps'][3][1].toString(),"1316441254606065190000");
-
-        // // pools should be in right order
-        // assert.equal(result['swaps'][0][0].pool.toString(),pools[3]);
-        // assert.equal(result['swaps'][0][1].pool.toString(),pools[2]);
-        // assert.equal(result['swaps'][0][2].pool.toString(),pools[1]);
-        // assert.equal(result['swaps'][0][3].pool.toString(),pools[0]);
 
         const totalAmountIn = toWei('10000');
         const numberPools = toWei('4');
