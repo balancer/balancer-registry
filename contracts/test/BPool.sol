@@ -504,10 +504,10 @@ contract BPool is BBronze, BToken, BMath {
         Record storage inRecord = _records[address(tokenIn)];
         Record storage outRecord = _records[address(tokenOut)];
 
-        console.log("swapExactAmountOut: %s", address(this));
-        console.log(tokenAmountOut);
+        //console.log("swapExactAmountOut: %s", address(this));
+        //console.log(tokenAmountOut);
         uint ratioCheck = bmul(outRecord.balance, MAX_OUT_RATIO);
-        console.log(ratioCheck);
+        //console.log(ratioCheck);
 
         require(tokenAmountOut <= bmul(outRecord.balance, MAX_OUT_RATIO), "ERR_MAX_OUT_RATIO");
 

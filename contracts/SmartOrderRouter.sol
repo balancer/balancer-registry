@@ -14,6 +14,7 @@
 pragma solidity 0.5.12;
 pragma experimental ABIEncoderV2;
 
+import "@nomiclabs/buidler/console.sol";
 
 import "./BNum.sol";
 
@@ -23,6 +24,7 @@ contract RegistryInterface {
 }
 
 contract PoolInterface {
+    uint public MAX_OUT_RATIO;
     function swapExactAmountIn(address, uint, address, uint, uint) external returns (uint, uint);
     function swapExactAmountOut(address, uint, address, uint, uint) external returns (uint, uint);
     function getNormalizedWeight(address) external view returns (uint);
@@ -130,7 +132,7 @@ contract SmartOrderRouter is BNum {
             pools[i] = getPoolData(tokenIn, tokenOut, poolAddresses[i]);
         }
 
-        (uint[] memory bestInputAmounts, Pool[] memory bestPools) = calcSplit(pools, swapAmount, nPools);
+        (uint[] memory bestInputAmounts, Pool[] memory bestPools) = calcSplit(pools, swapAmount, nPools, tokenOut);
 
         swaps = new Swap[](bestPools.length);
 
@@ -256,9 +258,10 @@ contract SmartOrderRouter is BNum {
     function calcSplit(
         Pool[] memory pools,
         uint swapAmount,
-        uint nPools
+        uint nPools,
+        address tokenAddr
     )
-        public pure
+        public view
         returns (uint[] memory bestInputAmounts, Pool[] memory bestPools)
     {
 
@@ -280,13 +283,27 @@ contract SmartOrderRouter is BNum {
         // Calculate inputAmounts and price
         bestInputAmounts = new uint[](bestPools.length);
         for (uint i = 0; i < bestPools.length; i++) {
-            bestInputAmounts[i] = bmul(
+            uint amt = bmul(
                 swapAmount,
                 bdiv(
                     inverseSlippage[i],
                     suminverseSlippage
                 )
             );
+
+            PoolInterface pool = PoolInterface(bestPools[i].pool);
+            uint BONE = 10**18;
+            uint max = (BONE / 3) + 1 wei;
+            uint balance = pool.getBalance(tokenAddr);
+            uint ratioCheck = bmul(balance, max);
+
+            if(amt <= ratioCheck){
+              bestInputAmounts[i] = amt;
+            }else{
+              console.log("SOR SC RATIO CHECK FAIL, %s: ", bestPools[i].pool);
+              console.log("Ratio: %s, Swap I/P: %s", ratioCheck, amt);
+              bestInputAmounts[i] = ratioCheck;
+            }
         }
 
         bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
