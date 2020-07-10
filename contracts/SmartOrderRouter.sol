@@ -132,7 +132,7 @@ contract SmartOrderRouter is BNum {
             pools[i] = getPoolData(tokenIn, tokenOut, poolAddresses[i]);
         }
 
-        (uint[] memory bestInputAmounts, Pool[] memory bestPools) = calcSplit(pools, swapAmount, nPools, tokenOut);
+        (uint[] memory bestInputAmounts, Pool[] memory bestPools) = calcSplit(pools, swapAmount, nPools, swapExactIn, tokenIn, tokenOut);
 
         swaps = new Swap[](bestPools.length);
 
@@ -255,16 +255,53 @@ contract SmartOrderRouter is BNum {
 
     }
 
+    function checkRatio(
+        address poolAddress,
+        bool swapExactIn,
+        address tokenIn,
+        address tokenOut,
+        uint swapAmount
+    )
+        public view
+        returns (uint amount)
+    {
+        uint BONE = 10**18;
+
+        PoolInterface pool = PoolInterface(poolAddress);
+
+        uint ratioCheck;
+
+        if(swapExactIn){
+            uint maxInRatio = BONE / 2;
+            uint balance = pool.getBalance(tokenIn);
+            ratioCheck = bmul(balance, maxInRatio);
+        }else{
+            uint maxOutRatio = (BONE / 3) + 1 wei;
+            uint balance = pool.getBalance(tokenOut);
+            ratioCheck = bmul(balance, maxOutRatio);
+        }
+
+        if(swapAmount <= ratioCheck){
+          amount = swapAmount;
+        }else{
+          console.log("SOR SC RATIO CHECK FAIL, %s: ", poolAddress);
+          console.log("Ratio: %s, Swap: %s", ratioCheck, swapAmount);
+          amount = ratioCheck;
+        }
+        return amount;
+    }
+
     function calcSplit(
         Pool[] memory pools,
         uint swapAmount,
         uint nPools,
-        address tokenAddr
+        bool swapExactIn,
+        address tokenIn,
+        address tokenOut
     )
         public view
         returns (uint[] memory bestInputAmounts, Pool[] memory bestPools)
     {
-
         // Gets nPools with best liquidity (lowest slippageSlopeEffectivePrice) ignoring spot prices
         bestPools = getBestPoolsBySlippage(pools, nPools);
 
@@ -291,19 +328,13 @@ contract SmartOrderRouter is BNum {
                 )
             );
 
-            PoolInterface pool = PoolInterface(bestPools[i].pool);
-            uint BONE = 10**18;
-            uint max = (BONE / 3) + 1 wei;
-            uint balance = pool.getBalance(tokenAddr);
-            uint ratioCheck = bmul(balance, max);
-
-            if(amt <= ratioCheck){
-              bestInputAmounts[i] = amt;
-            }else{
-              console.log("SOR SC RATIO CHECK FAIL, %s: ", bestPools[i].pool);
-              console.log("Ratio: %s, Swap I/P: %s", ratioCheck, amt);
-              bestInputAmounts[i] = ratioCheck;
-            }
+            bestInputAmounts[i] = checkRatio(
+                bestPools[i].pool,
+                swapExactIn,
+                tokenIn,
+                tokenOut,
+                amt
+            );
         }
 
         bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
