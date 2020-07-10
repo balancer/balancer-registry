@@ -29,7 +29,7 @@ describe('ExchangeProxy Smart Swaps', function(){
         const BFactory = await ethers.getContractFactory('BFactory');
         const BPool = await ethers.getContractFactory('BPool');
         const TToken = await ethers.getContractFactory('TToken');
-        const ExchangeProxy = await ethers.getContractFactory("ExchangeProxyMultihop");
+        const ExchangeProxy = await ethers.getContractFactory("ExchangeProxy");
         const Weth9 = await ethers.getContractFactory('WETH9');
         const [adminSigner] = await ethers.getSigners();
         const admin = await adminSigner.getAddress();
@@ -125,50 +125,16 @@ describe('ExchangeProxy Smart Swaps', function(){
         await registry.sortPools([MKR, WETH], 10);
     });
 
-    it('SimplifiedCalcSplit swapExactOut, input_amount = 100,000', async () => {
-        // !!!!!!! getBestPoolsWithLimit should probably be used (also in Contract)
-        let pools1 = await registry.getBestPoolsWithLimit(MKR, WETH, 10)
-        let pools = await registry.getPoolsWithLimit(MKR, WETH, 0, 10)
-
-        console.log(pools1);
-        console.log(pools);
-
-        // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
-        // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
-        let result = await smartOrderRouter.viewSplit(false, MKR, WETH, toWei('100000'), 4); // Sell 100000 WETH for MKR
-
-        // result.swaps[0].tokenOutParam.toString() is Same as: result['swaps'][0][2]
-        assert.equal(result.swaps[0].tokenOutParam.toString(), "34681223095510744100000");
-        assert.equal(result.swaps[1].tokenOutParam.toString(), "26215324499553495700000");
-        assert.equal(result.swaps[2].tokenOutParam.toString(), "25939039858875108300000");
-        assert.equal(result.swaps[3].tokenOutParam.toString(), "13164412546060651900000");
-        assert.equal(result.totalOutput.toString(), "1434955757400869016687020");
-
-        const totalAmountOut = toWei('100000');
-        // const numberPools = toWei('4');
-
-        const totalAmountIn = await proxy.callStatic.smartSwapExactOut(
-            SOR, MKR, WETH, totalAmountOut, 4
-        );
-
-        console.log(result.totalOutput.toString())
-        console.log(totalAmountIn.toString())
-    });
-
     it('SimplifiedCalcSplit swapExactIn, input_amount = 10,000', async () => {
 
         let pools1 = await registry.getBestPoolsWithLimit(MKR, WETH, 10)
         let pools = await registry.getPoolsWithLimit(MKR, WETH, 0, 10)
 
-        console.log(pools)
+        // console.log(pools)
         // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
         // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
         let result = await smartOrderRouter.viewSplit(true, MKR, WETH, toWei('10000'), 4); // Sell 100000 WETH for MKR
-        console.log("totalOutput: " + result['totalOutput'].toString());
-        // // Split amounts should be correct:
-        // console.log(result[0].toString());
-        console.log("totalOutput: " + result[1].toString());
-        // console.log(JSON.stringify(result))
+
         assert.equal(result['swaps'][0][1].toString(),"3468122309551074410000");
         assert.equal(result['swaps'][1][1].toString(),"2621532449955349570000");
         assert.equal(result['swaps'][2][1].toString(),"2593903985887510830000");
@@ -183,4 +149,44 @@ describe('ExchangeProxy Smart Swaps', function(){
         console.log(result.totalOutput.toString())
         console.log(totalAmountOut.toString())
     });
+
+    it('SimplifiedCalcSplit swapExactOut, input_amount = 100,000', async () => {
+        // !!!!!!! getBestPoolsWithLimit should probably be used (also in Contract) but not currently correct
+        let pools1 = await registry.getBestPoolsWithLimit(MKR, WETH, 10)
+        let pools = await registry.getPoolsWithLimit(MKR, WETH, 0, 10)
+
+        // console.log(pools1);
+        // console.log(pools);
+
+        // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
+        // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
+        let result = await smartOrderRouter.viewSplit(false, MKR, WETH, toWei('100000'), 4); // Sell 100000 WETH for MKR
+
+        // result.swaps[0].tokenOutParam.toString() is Same as: result['swaps'][0][2]
+        assert.equal(result.swaps[0].tokenOutParam.toString(), "34681223095510744100000");
+        assert.equal(result.swaps[1].tokenOutParam.toString(), "26215324499553495700000");
+        assert.equal(result.swaps[2].tokenOutParam.toString(), "25939039858875108300000");
+        assert.equal(result.swaps[3].tokenOutParam.toString(), "13164412546060651900000");
+        assert.equal(result.totalOutput.toString(), "1434955757400869016687020");
+
+        result.swaps.forEach((swap: any, i: any) => {
+          console.log(`Swap ${i}: ${swap.pool}`);
+          console.log(`${swap.tokenInParam}`);
+          console.log(`${swap.tokenOutParam}`);
+          console.log(`${swap.maxPrice}`);
+        })
+
+        console.log(result.totalOutput.toString());
+        
+        const totalAmountOut = toWei('100000');
+        const numberPools = toWei('4');
+
+        const totalAmountIn = await proxy.callStatic.smartSwapExactOut(
+            SOR, MKR, WETH, totalAmountOut, numberPools
+        );
+
+        console.log(result.totalOutput.toString());
+        console.log(totalAmountIn.toString());
+    });
+
 });

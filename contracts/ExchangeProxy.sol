@@ -517,6 +517,8 @@ contract ExchangeProxy {
         public payable
         returns (uint totalAmountIn)
     {
+        console.log("TESTING");
+
         SmartOrderRouterInterface sor = SmartOrderRouterInterface(sorAddress);
 
         SmartOrderRouterInterface.Swap[] memory swaps;
@@ -529,7 +531,13 @@ contract ExchangeProxy {
         swapsLocal = new SwapDirect[](swaps.length);
         for (uint i = 0; i < swaps.length; i++) {
           swapsLocal[i] = SwapDirect(swaps[i].pool, swaps[i].tokenInParam, swaps[i].tokenOutParam, swaps[i].maxPrice);
+          console.log("Swap: %s, %s", i, swaps[i].pool);
+          console.log("Swap: %s", swaps[i].tokenInParam);
+          console.log("Swap: %s", swaps[i].tokenOutParam);
+          console.log("Swap: %s", swaps[i].maxPrice);
         }
+
+        console.log("maxIn: %s", maxTotalAmountIn);
 
         TokenInterface swapTokenIn = TokenInterface(tokenIn);
         TokenInterface swapTokenOut = TokenInterface(tokenOut);
