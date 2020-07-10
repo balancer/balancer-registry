@@ -187,6 +187,7 @@ describe('ExchangeProxy Smart Swaps', function(){
             SOR, MKR, WETH, totalAmountOut, numberPools
         );
 
+        console.log(`MAnual Check: 1442189130473282865208277`)
         console.log(`Total In SOR: ${result.totalOutput.toString()}`);
         console.log(`Total In SmartSwap: ${totalAmountIn.toString()}`);
     });

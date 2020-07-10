@@ -255,7 +255,7 @@ contract SmartOrderRouter is BNum {
 
     }
 
-    function checkRatio(
+    function getSafeAmount(
         address poolAddress,
         bool swapExactIn,
         address tokenIn,
@@ -263,7 +263,7 @@ contract SmartOrderRouter is BNum {
         uint swapAmount
     )
         public view
-        returns (uint amount)
+        returns (bool isPass, uint amount)
     {
         uint BONE = 10**18;
 
@@ -283,12 +283,14 @@ contract SmartOrderRouter is BNum {
 
         if(swapAmount <= ratioCheck){
           amount = swapAmount;
+          isPass = true;
         }else{
           console.log("SOR SC RATIO CHECK FAIL, %s: ", poolAddress);
           console.log("Ratio: %s, Swap: %s", ratioCheck, swapAmount);
           amount = ratioCheck;
+          isPass = false;
         }
-        return amount;
+        return (isPass, amount);
     }
 
     function calcSplit(
@@ -328,7 +330,7 @@ contract SmartOrderRouter is BNum {
                 )
             );
 
-            bestInputAmounts[i] = checkRatio(
+            (, bestInputAmounts[i]) = getSafeAmount(
                 bestPools[i].pool,
                 swapExactIn,
                 tokenIn,
@@ -337,7 +339,15 @@ contract SmartOrderRouter is BNum {
             );
         }
 
-        bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
+        // bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
+        bestInputAmounts = calcDustNEW(
+            bestPools,
+            swapExactIn,
+            tokenIn,
+            tokenOut,
+            bestInputAmounts,
+            swapAmount
+        );
 
         return (bestInputAmounts, bestPools);
     }
@@ -372,6 +382,41 @@ contract SmartOrderRouter is BNum {
             pools = removePool(pools, indexBestPool);
         }
         return bestPools;
+    }
+
+    function calcDustNEW(
+        Pool[] memory bestPools,
+        bool swapExactIn,
+        address tokenIn,
+        address tokenOut,
+        uint[] memory bestInputAmounts,
+        uint swapAmount
+    )
+        public view
+        returns (uint[] memory)
+    {
+        uint sumBestInputAmounts = sum(bestInputAmounts);
+        uint dust = bsub(swapAmount, sumBestInputAmounts);
+        bool isPass;
+        for (uint i = 0; i < bestPools.length; i++) {
+            // Check if adding the dust causes ratio to fail
+            uint newAmt = badd(bestInputAmounts[i], dust);
+            (isPass, ) = getSafeAmount(
+                bestPools[i].pool,
+                swapExactIn,
+                tokenIn,
+                tokenOut,
+                newAmt
+            );
+
+            if(isPass){
+              bestInputAmounts[i] = newAmt;
+              break;
+            }
+
+        }
+
+        return bestInputAmounts;
     }
 
     function calcDust(
