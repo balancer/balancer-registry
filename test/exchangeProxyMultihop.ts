@@ -33,7 +33,7 @@ describe('ExchangeProxyMultihop', async () => {
     before(async () => {
         [admin, nonAdmin] = await ethers.getSigners();
 
-        const ExchangeProxyMultihop = await ethers.getContractFactory("ExchangeProxyMultihop");
+        const ExchangeProxy = await ethers.getContractFactory("ExchangeProxy");
         const BFactory = await ethers.getContractFactory('BFactory');
         const BPool = await ethers.getContractFactory('BPool');
         const Weth9 = await ethers.getContractFactory('WETH9');
@@ -48,7 +48,7 @@ describe('ExchangeProxyMultihop', async () => {
         DAI = dai.address;
         MKR = mkr.address;
 
-        proxy = await ExchangeProxyMultihop.deploy(WETH);
+        proxy = await ExchangeProxy.deploy(WETH);
         await proxy.deployed();
         PROXY = proxy.address;
 

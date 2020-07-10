@@ -29,7 +29,7 @@ describe('ExchangeProxy Smart Swaps', function(){
         const BFactory = await ethers.getContractFactory('BFactory');
         const BPool = await ethers.getContractFactory('BPool');
         const TToken = await ethers.getContractFactory('TToken');
-        const ExchangeProxy = await ethers.getContractFactory("ExchangeProxyMultihop");
+        const ExchangeProxy = await ethers.getContractFactory("ExchangeProxy");
         const Weth9 = await ethers.getContractFactory('WETH9');
         const [adminSigner] = await ethers.getSigners();
         const admin = await adminSigner.getAddress();
@@ -130,9 +130,6 @@ describe('ExchangeProxy Smart Swaps', function(){
         let pools1 = await registry.getBestPoolsWithLimit(MKR, WETH, 10)
         let pools = await registry.getPoolsWithLimit(MKR, WETH, 0, 10)
 
-        console.log(pools1);
-        console.log(pools);
-
         // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
         // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
         let result = await smartOrderRouter.viewSplit(false, MKR, WETH, toWei('100000'), 4); // Sell 100000 WETH for MKR
@@ -160,25 +157,13 @@ describe('ExchangeProxy Smart Swaps', function(){
         let pools1 = await registry.getBestPoolsWithLimit(MKR, WETH, 10)
         let pools = await registry.getPoolsWithLimit(MKR, WETH, 0, 10)
 
-        console.log(pools)
         // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
         // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
         let result = await smartOrderRouter.viewSplit(true, MKR, WETH, toWei('10000'), 4); // Sell 100000 WETH for MKR
-        console.log("totalOutput: " + result['totalOutput'].toString());
-        // // Split amounts should be correct:
-        // console.log(result[0].toString());
-        console.log("totalOutput: " + result[1].toString());
-        // console.log(JSON.stringify(result))
         assert.equal(result['swaps'][0][1].toString(),"3468122309551074410000");
         assert.equal(result['swaps'][1][1].toString(),"2621532449955349570000");
         assert.equal(result['swaps'][2][1].toString(),"2593903985887510830000");
         assert.equal(result['swaps'][3][1].toString(),"1316441254606065190000");
-
-        // // pools should be in right order
-        // assert.equal(result['swaps'][0][0].pool.toString(),pools[3]);
-        // assert.equal(result['swaps'][0][1].pool.toString(),pools[2]);
-        // assert.equal(result['swaps'][0][2].pool.toString(),pools[1]);
-        // assert.equal(result['swaps'][0][3].pool.toString(),pools[0]);
 
         const totalAmountIn = toWei('10000');
         const numberPools = toWei('4');
