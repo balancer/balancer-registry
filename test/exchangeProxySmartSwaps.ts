@@ -132,16 +132,16 @@ describe('ExchangeProxy Smart Swaps', function(){
 
         // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
         // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
-        let result = await smartOrderRouter.viewSplit(false, MKR, WETH, toWei('100000'), 4); // Sell 100000 WETH for MKR
+        let result = await smartOrderRouter.viewSplit(false, MKR, WETH, toWei('10000'), 4); // Sell 100000 WETH for MKR
 
         // result.swaps[0].tokenOutParam.toString() is Same as: result['swaps'][0][2]
-        assert.equal(result.swaps[0].tokenOutParam.toString(), "34681223095510744100000");
-        assert.equal(result.swaps[1].tokenOutParam.toString(), "26215324499553495700000");
-        assert.equal(result.swaps[2].tokenOutParam.toString(), "25939039858875108300000");
-        assert.equal(result.swaps[3].tokenOutParam.toString(), "13164412546060651900000");
-        assert.equal(result.totalOutput.toString(), "1434955757400869016687020");
+        assert.equal(result.swaps[0].tokenOutParam.toString(), "3468122309551074410000");
+        assert.equal(result.swaps[1].tokenOutParam.toString(), "2621532449955349570000");
+        assert.equal(result.swaps[2].tokenOutParam.toString(), "2593903985887510830000");
+        assert.equal(result.swaps[3].tokenOutParam.toString(), "1316441254606065190000");
+        assert.equal(result.totalOutput.toString(), "104289193841332281129540");
 
-        const totalAmountIn = toWei('100000');
+        const totalAmountIn = toWei('10000');
         const numberPools = toWei('4');
 
         const totalAmountOut = await proxy.callStatic.smartSwapExactOut(
