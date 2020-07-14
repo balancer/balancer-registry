@@ -24,6 +24,10 @@ const config: BuidlerConfig = {
   networks: {
     buidlerevm: {
       blockGasLimit: 20000000,
+      accounts: [
+        { privateKey: '0x2f0a13c9ca247b719738e9275b9cf16fbe49fa2e31e09ece0a190e23481e63e3', balance: '1000000000000000000000000000000' },
+        { privateKey: '0x56d6ec847fd896d97961ec83ac0fddb9f40ad0f72f77704f2d14051a9ae81aa0', balance: '1000000000000000000000000000000' }
+      ]
     },
   },
 };

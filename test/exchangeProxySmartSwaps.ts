@@ -43,24 +43,23 @@ describe('ExchangeProxy Smart Swaps', function(){
         await smartOrderRouter.deployed();
         SOR = smartOrderRouter.address;
 
-        weth = await TToken.deploy('Wrapped Ether', 'WETH', 18);
         mkr = await TToken.deploy('Maker', 'MKR', 18);
-        await weth.deployed();
         await mkr.deployed();
-
-        WETH = weth.address;
         MKR = mkr.address;
 
         let weth9 = await Weth9.deploy();
+        await weth9.deployed();
+        WETH = weth9.address;
+
         proxy = await ExchangeProxy.deploy(weth9.address);
         await proxy.deployed();
         PROXY = proxy.address;
-        await weth.approve(PROXY, MAX);
+        await weth9.approve(PROXY, MAX);
         await mkr.approve(PROXY, MAX);
 
-
         // Admin balances
-        await weth.mint(admin, toWei('1000000000000000000000'));
+        await weth9.deposit({ value: toWei('10000000000') });
+
         await mkr.mint(admin,  toWei('1000000000000000000000'));
 
         // Copy pools printed by https://github.com/balancer-labs/python-SOR/blob/master/Onchain_SOR_test_comparison.py
@@ -106,7 +105,7 @@ describe('ExchangeProxy Smart Swaps', function(){
             let poolContract = await ethers.getContractAt("BPool", poolAddr);
             _pools.push(poolContract);
 
-            await weth.approve(_POOLS[i], MAX);
+            await weth9.approve(_POOLS[i], MAX);
             await mkr.approve(_POOLS[i], MAX);
 
             await _pools[i].bind(WETH, toWei(poolsData[i]['Bweth'].toString()), toWei(poolsData[i]['Wweth'].toString()));
