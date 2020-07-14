@@ -2,6 +2,7 @@ import { assert } from 'chai';
 import { ethers, ethereum } from "@nomiclabs/buidler";
 import { Signer, utils } from "ethers";
 const verbose = process.env.VERBOSE;
+const Decimal = require('decimal.js');
 
 describe('ExchangeProxy Smart Swaps', function(){
     const toWei = utils.parseEther;
@@ -15,6 +16,7 @@ describe('ExchangeProxy Smart Swaps', function(){
     let REGISTRY: any;
     let WETH: string;
     let MKR: string;
+    let ETH: string = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
     let weth: any;
     let mkr: any;
     let proxy: any;
@@ -51,7 +53,7 @@ describe('ExchangeProxy Smart Swaps', function(){
         await weth9.deployed();
         WETH = weth9.address;
 
-        proxy = await ExchangeProxy.deploy(weth9.address);
+        proxy = await ExchangeProxy.deploy(WETH);
         await proxy.deployed();
         PROXY = proxy.address;
         await weth9.approve(PROXY, MAX);
@@ -124,14 +126,86 @@ describe('ExchangeProxy Smart Swaps', function(){
         await registry.sortPools([MKR, WETH], 10);
     });
 
-    it('SimplifiedCalcSplit swapExactOut, input_amount = 100,000', async () => {
-        // !!!!!!! getBestPoolsWithLimit should probably be used (also in Contract)
-        let pools1 = await registry.getBestPoolsWithLimit(MKR, WETH, 10)
-        let pools = await registry.getPoolsWithLimit(MKR, WETH, 0, 10)
+    it('swapExactIn, MKR->WETH, input_amount = 10000', async () => {
+        const totalAmountIn = toWei('10000');
+        const numberPools = toWei('4');
 
-        // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
-        // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
-        let result = await smartOrderRouter.viewSplit(false, MKR, WETH, toWei('10000'), 4); // Sell 100000 WETH for MKR
+        let result = await smartOrderRouter.viewSplit(true, MKR, WETH, totalAmountIn, numberPools);
+        assert.equal(result.swaps.length, 4);
+        assert.equal(result.swaps[0].tokenInParam, "3468122309551074410000");
+        assert.equal(result.swaps[1].tokenInParam, "2621532449955349570000");
+        assert.equal(result.swaps[2].tokenInParam, "2593903985887510830000");
+        assert.equal(result.swaps[3].tokenInParam, "1316441254606065190000");
+
+        let totalCheck = Decimal(0);
+        result.swaps.forEach((swap: any) => {
+            totalCheck = totalCheck.plus(Decimal(swap.tokenInParam.toString()));
+        })
+        assert(Decimal(totalAmountIn.toString()).eq(totalCheck));
+
+        const totalAmountOut = await proxy.callStatic.smartSwapExactIn(
+            SOR, MKR, WETH, totalAmountIn, numberPools
+        );
+
+        assert.equal(result.totalOutput.toString(), totalAmountOut.toString());
+    });
+
+    it('swapExactIn, ETH->MKR, input_amount = 10', async () => {
+        const totalAmountIn = toWei('10');
+        const numberPools = toWei('4');
+
+        let result = await smartOrderRouter.viewSplit(true, WETH, MKR, totalAmountIn, numberPools);
+        assert.equal(result.swaps[0].tokenInParam.toString(), "3492726534362125410");
+        assert.equal(result.swaps[1].tokenInParam.toString(), "2603141843340295880");
+        assert.equal(result.swaps[2].tokenInParam.toString(), "2595630500963031390");
+        assert.equal(result.swaps[3].tokenInParam.toString(), "1308501121334547320");
+        assert.equal(result.totalOutput.toString(), "99214758802480485156");
+
+        let totalCheck = Decimal(0);
+        result.swaps.forEach((swap: any) => {
+            totalCheck = totalCheck.plus(Decimal(swap.tokenInParam.toString()));
+        })
+        assert(Decimal(totalAmountIn.toString()).eq(totalCheck));
+
+        const totalAmountOut = await proxy.callStatic.smartSwapExactIn(
+            SOR, ETH, MKR, totalAmountIn, numberPools,
+            {
+              value: totalAmountIn
+            }
+        );
+
+        assert.equal(result.totalOutput.toString(), totalAmountOut.toString());
+    });
+
+    it('swapExactIn, MKR->ETH, input_amount = 77.77', async () => {
+        const totalAmountIn = toWei('77.77');
+        const numberPools = toWei('4');
+
+        let result = await smartOrderRouter.viewSplit(true, MKR, WETH, totalAmountIn, numberPools);
+        assert.equal(result.swaps[0].tokenInParam.toString(), "26971587201378705686");
+        assert.equal(result.swaps[1].tokenInParam.toString(), "20387657863302753606");
+        assert.equal(result.swaps[2].tokenInParam.toString(), "20172791298247171725");
+        assert.equal(result.swaps[3].tokenInParam.toString(), "10237963637071368983");
+        assert.equal(result.totalOutput.toString(), "7679415326946795121");
+
+        let totalCheck = Decimal(0);
+        result.swaps.forEach((swap: any) => {
+            totalCheck = totalCheck.plus(Decimal(swap.tokenInParam.toString()));
+        })
+        assert(Decimal(totalAmountIn.toString()).eq(totalCheck));
+
+        const totalAmountOut = await proxy.callStatic.smartSwapExactIn(
+            SOR, MKR, ETH, totalAmountIn, numberPools
+        );
+
+        assert.equal(result.totalOutput.toString(), totalAmountOut.toString());
+    });
+
+    it('swapExactOut, MKR->WETH, output_amount = 10000', async () => {
+        const totalAmountOut = toWei('10000');
+        const numberPools = toWei('4');
+
+        let result = await smartOrderRouter.viewSplit(false, MKR, WETH, totalAmountOut, numberPools);
 
         // result.swaps[0].tokenOutParam.toString() is Same as: result['swaps'][0][2]
         assert.equal(result.swaps[0].tokenOutParam.toString(), "3468122309551074410000");
@@ -140,37 +214,73 @@ describe('ExchangeProxy Smart Swaps', function(){
         assert.equal(result.swaps[3].tokenOutParam.toString(), "1316441254606065190000");
         assert.equal(result.totalOutput.toString(), "104289193841332281129540");
 
-        const totalAmountIn = toWei('10000');
-        const numberPools = toWei('4');
+        let totalCheck = Decimal(0);
+        result.swaps.forEach((swap: any) => {
+            totalCheck = totalCheck.plus(Decimal(swap.tokenOutParam.toString()));
+        })
+        assert(Decimal(totalAmountOut.toString()).eq(totalCheck));
 
-        const totalAmountOut = await proxy.callStatic.smartSwapExactOut(
-            SOR, MKR, WETH, totalAmountIn, numberPools
+        const totalIn = await proxy.callStatic.smartSwapExactOut(
+            SOR, MKR, WETH, totalAmountOut, numberPools
         );
 
-        console.log(result.totalOutput.toString())
-        console.log(totalAmountOut.toString())
+        assert.equal(result.totalOutput.toString(), totalIn.toString());
     });
 
-    it('SimplifiedCalcSplit swapExactIn, input_amount = 10,000', async () => {
-
-        let pools1 = await registry.getBestPoolsWithLimit(MKR, WETH, 10)
-        let pools = await registry.getPoolsWithLimit(MKR, WETH, 0, 10)
-
-        // _POOLS[0] has been correctly left out of new proposal since it would make up less than 10% of total liquidity
-        // result = await smartOrderRouter.viewSimplifiedSplit(MKR, WETH, toWei('100000'),4); // Sell 100000 WETH for MKR
-        let result = await smartOrderRouter.viewSplit(true, MKR, WETH, toWei('10000'), 4); // Sell 100000 WETH for MKR
-        assert.equal(result['swaps'][0][1].toString(),"3468122309551074410000");
-        assert.equal(result['swaps'][1][1].toString(),"2621532449955349570000");
-        assert.equal(result['swaps'][2][1].toString(),"2593903985887510830000");
-        assert.equal(result['swaps'][3][1].toString(),"1316441254606065190000");
-
-        const totalAmountIn = toWei('10000');
+    it('swapExactOut, ETH->MKR, output_amount = 354', async () => {
+        const totalAmountOut = toWei('354');
         const numberPools = toWei('4');
 
-        const totalAmountOut = await proxy.callStatic.smartSwapExactIn(
-            SOR, MKR, WETH, totalAmountIn, numberPools
+        let result = await smartOrderRouter.viewSplit(false, WETH, MKR, totalAmountOut, numberPools);
+
+        // result.swaps[0].tokenOutParam.toString() is Same as: result['swaps'][0][2]
+        assert.equal(result.swaps[0].tokenOutParam.toString(), "123642519316419239514");
+        assert.equal(result.swaps[1].tokenOutParam.toString(), "92151221254246474152");
+        assert.equal(result.swaps[2].tokenOutParam.toString(), "91885319734091311206");
+        assert.equal(result.swaps[3].tokenOutParam.toString(), "46320939695242975128");
+        assert.equal(result.totalOutput.toString(), "35687772808297263273");
+
+        let totalCheck = Decimal(0);
+        result.swaps.forEach((swap: any) => {
+            // console.log(swap.tokenOutParam.toString())
+            totalCheck = totalCheck.plus(Decimal(swap.tokenOutParam.toString()));
+        })
+        assert(Decimal(totalAmountOut.toString()).eq(totalCheck));
+
+        const totalIn = await proxy.callStatic.smartSwapExactOut(
+            SOR, ETH, MKR, totalAmountOut, numberPools,
+            {
+              value: result.totalOutput
+            }
         );
-        console.log(result.totalOutput.toString())
-        console.log(totalAmountOut.toString())
+
+        assert.equal(result.totalOutput.toString(), totalIn.toString());
+    });
+
+    it('swapExactOut, MKR->ETH, output_amount = 584', async () => {
+        const totalAmountOut = toWei('584');
+        const numberPools = toWei('4');
+
+        let result = await smartOrderRouter.viewSplit(false, MKR, WETH, totalAmountOut, numberPools);
+
+        // result.swaps[0].tokenOutParam.toString() is Same as: result['swaps'][0][2]
+        assert.equal(result.swaps[0].tokenOutParam.toString(), "202538342877782745544");
+        assert.equal(result.swaps[1].tokenOutParam.toString(), "153097495077392414888");
+        assert.equal(result.swaps[2].tokenOutParam.toString(), "151483992775830632472");
+        assert.equal(result.swaps[3].tokenOutParam.toString(), "76880169268994207096");
+        assert.equal(result.totalOutput.toString(), "5924319155850574968070");
+
+        const totalIn = await proxy.callStatic.smartSwapExactOut(
+            SOR, MKR, ETH, totalAmountOut, numberPools
+        );
+
+        let totalCheck = Decimal(0);
+        result.swaps.forEach((swap: any) => {
+            // console.log(swap.tokenOutParam.toString())
+            totalCheck = totalCheck.plus(Decimal(swap.tokenOutParam.toString()));
+        })
+        assert(Decimal(totalAmountOut.toString()).eq(totalCheck));
+
+        assert.equal(result.totalOutput.toString(), totalIn.toString());
     });
 });

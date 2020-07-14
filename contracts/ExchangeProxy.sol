@@ -467,12 +467,23 @@ contract ExchangeProxy {
         public payable
         returns (uint totalAmountOut)
     {
+        TokenInterface swapTokenIn = TokenInterface(tokenIn);
+        TokenInterface swapTokenOut = TokenInterface(tokenOut);
+
         SmartOrderRouterInterface sor = SmartOrderRouterInterface(sorAddress);
 
         SmartOrderRouterInterface.Swap[] memory swaps;
-
         uint minTotalAmountOut;
-        (swaps, minTotalAmountOut) = sor.viewSplit(true, tokenIn, tokenOut, totalAmountIn, nPools);
+
+        // SOR doesn't currently support ETH/WETH directly
+        if (isETH(swapTokenIn)) {
+          (swaps, minTotalAmountOut) = sor.viewSplit(true, address(weth), tokenOut, totalAmountIn, nPools);
+        } else if (isETH(swapTokenOut)){
+          (swaps, minTotalAmountOut) = sor.viewSplit(true, tokenIn, address(weth), totalAmountIn, nPools);
+        } else {
+          (swaps, minTotalAmountOut) = sor.viewSplit(true, tokenIn, tokenOut, totalAmountIn, nPools);
+        }
+
         // !!!!!!! not sure why I can't use directly as same structure?
         SwapDirect[] memory swapsLocal;
         swapsLocal = new SwapDirect[](swaps.length);
@@ -480,9 +491,7 @@ contract ExchangeProxy {
           swapsLocal[i] = SwapDirect(swaps[i].pool, swaps[i].tokenInParam, swaps[i].tokenOutParam, swaps[i].maxPrice);
         }
 
-        TokenInterface swapTokenIn = TokenInterface(tokenIn);
-        TokenInterface swapTokenOut = TokenInterface(tokenOut);
-        // !!!!!!! check here for Eth, etc and choose correct batchSwap - not sure if this is a good idea?
+        // !!!!!!! check here for Eth, etc and choose correct batchSwap - not sure if this is best?
         if (isETH(swapTokenIn)) {
             totalAmountOut = batchEthInSwapExactIn(
                 swapsLocal,
@@ -517,28 +526,29 @@ contract ExchangeProxy {
         public payable
         returns (uint totalAmountIn)
     {
+        TokenInterface swapTokenIn = TokenInterface(tokenIn);
+        TokenInterface swapTokenOut = TokenInterface(tokenOut);
+
         SmartOrderRouterInterface sor = SmartOrderRouterInterface(sorAddress);
 
         SmartOrderRouterInterface.Swap[] memory swaps;
-
         uint maxTotalAmountIn;
-        (swaps, maxTotalAmountIn) = sor.viewSplit(false, tokenIn, tokenOut, totalAmountOut, nPools);
 
+        // SOR doesn't currently support ETH/WETH directly
+        if (isETH(swapTokenIn)) {
+          (swaps, maxTotalAmountIn) = sor.viewSplit(false, address(weth), tokenOut, totalAmountOut, nPools);
+        } else if (isETH(swapTokenOut)){
+          (swaps, maxTotalAmountIn) = sor.viewSplit(false, tokenIn, address(weth), totalAmountOut, nPools);
+        } else {
+          (swaps, maxTotalAmountIn) = sor.viewSplit(false, tokenIn, tokenOut, totalAmountOut, nPools);
+        }
+        
         // !!!!!!! not sure why I can't use directly as same structure?
         SwapDirect[] memory swapsLocal;
         swapsLocal = new SwapDirect[](swaps.length);
         for (uint i = 0; i < swaps.length; i++) {
           swapsLocal[i] = SwapDirect(swaps[i].pool, swaps[i].tokenInParam, swaps[i].tokenOutParam, swaps[i].maxPrice);
-          /*
-          console.log("Swap: %s, %s", i, swaps[i].pool);
-          console.log("Swap: %s", swaps[i].tokenInParam);
-          console.log("Swap: %s", swaps[i].tokenOutParam);
-          console.log("Swap: %s", swaps[i].maxPrice);
-          */
         }
-
-        TokenInterface swapTokenIn = TokenInterface(tokenIn);
-        TokenInterface swapTokenOut = TokenInterface(tokenOut);
 
         if (isETH(swapTokenIn)) {
             totalAmountIn = batchEthInSwapExactOut(
