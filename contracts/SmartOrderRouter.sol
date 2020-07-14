@@ -125,6 +125,8 @@ contract SmartOrderRouter is BNum {
         returns (Swap[] memory swaps, uint totalOutput)
     {
         address[] memory poolAddresses = RegistryInterface(_registryAddress).getPoolsWithLimit(tokenIn, tokenOut, 0, nPools);
+        // !!!!!!! TODO: Current getBestPoolsWithLimit isn't returning correct pools so using getPoolsWithLimit instead
+        // address[] memory poolAddresses = RegistryInterface(_registryAddress).getBestPoolsWithLimit(tokenIn, tokenOut, nPools);
         Pool[] memory pools = new Pool[](poolAddresses.length);
         for (uint i = 0; i < poolAddresses.length; i++) {
             pools[i] = getPoolData(tokenIn, tokenOut, poolAddresses[i]);
