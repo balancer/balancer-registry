@@ -491,7 +491,7 @@ contract ExchangeProxy {
           swapsLocal[i] = SwapDirect(swaps[i].pool, swaps[i].tokenInParam, swaps[i].tokenOutParam, swaps[i].maxPrice);
         }
 
-        // !!!!!!! check here for Eth, etc and choose correct batchSwap - not sure if this is best?
+        // !!!!!!! this might not be most efficient but reuses existing proxy code?
         if (isETH(swapTokenIn)) {
             totalAmountOut = batchEthInSwapExactIn(
                 swapsLocal,
@@ -542,7 +542,7 @@ contract ExchangeProxy {
         } else {
           (swaps, maxTotalAmountIn) = sor.viewSplit(false, tokenIn, tokenOut, totalAmountOut, nPools);
         }
-        
+
         // !!!!!!! not sure why I can't use directly as same structure?
         SwapDirect[] memory swapsLocal;
         swapsLocal = new SwapDirect[](swaps.length);
@@ -550,6 +550,7 @@ contract ExchangeProxy {
           swapsLocal[i] = SwapDirect(swaps[i].pool, swaps[i].tokenInParam, swaps[i].tokenOutParam, swaps[i].maxPrice);
         }
 
+        // !!!!!!! this might not be most efficient but reuses existing proxy code?
         if (isETH(swapTokenIn)) {
             totalAmountIn = batchEthInSwapExactOut(
                 swapsLocal,
