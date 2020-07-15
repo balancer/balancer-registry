@@ -22,9 +22,9 @@ contract BRegistry {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     struct PoolPairInfo {
-        uint weight1;
-        uint weight2;
-        uint swapFee;
+        uint80 weight1;
+        uint80 weight2;
+        uint80 swapFee;
     }
 
     struct SortedPools {
@@ -112,15 +112,15 @@ contract BRegistry {
 
          if (token1 < token2) {
             _infos[pool][key] = PoolPairInfo({
-                weight1: IBPool(pool).getDenormalizedWeight(token1),
-                weight2: IBPool(pool).getDenormalizedWeight(token2),
-                swapFee: swapFee
+                weight1: uint80(IBPool(pool).getDenormalizedWeight(token1)),
+                weight2: uint80(IBPool(pool).getDenormalizedWeight(token2)),
+                swapFee: uint80(swapFee)
             });
         } else {
             _infos[pool][key] = PoolPairInfo({
-                weight1: IBPool(pool).getDenormalizedWeight(token2),
-                weight2: IBPool(pool).getDenormalizedWeight(token1),
-                swapFee: swapFee
+                weight1: uint80(IBPool(pool).getDenormalizedWeight(token2)),
+                weight2: uint80(IBPool(pool).getDenormalizedWeight(token1)),
+                swapFee: uint80(swapFee)
             });
         }
 
@@ -184,13 +184,26 @@ contract BRegistry {
             bytes32 key = _createKey(token1, token2);
             PoolPairInfo memory info = _infos[pools[i]][key];
             if (token1 < token2) {
-                invs[i] = (info.weight1.div(info.weight2)).add(BONE);
-                invs[i] = invs[i].div((2 * BONE).mul(IBPool(pools[i]).getBalance(token2)));
+                invs[i] = bdiv(uint256(info.weight1), uint256(info.weight2)).add(BONE);
+                invs[i] = bdiv(invs[i], (2 * BONE)).mul(IBPool(pools[i]).getBalance(token2));
             } else {
-                invs[i] = (info.weight2.div(info.weight1)).add(BONE);
-                invs[i] = invs[i].div((2 * BONE).mul(IBPool(pools[i]).getBalance(token1)));
+                invs[i] = bdiv(uint256(info.weight2), uint256(info.weight1)).add(BONE);
+                invs[i] = bdiv(invs[i], (2 * BONE)).mul(IBPool(pools[i]).getBalance(token1));
             }
         }
+    }
+
+    function bdiv(uint a, uint b)
+        internal pure
+        returns (uint)
+    {
+        require(b != 0, "ERR_DIV_ZERO");
+        uint c0 = a * BONE;
+        require(a == 0 || c0 / a == BONE, "ERR_DIV_INTERNAL"); // bmul overflow
+        uint c1 = c0 + (b / 2);
+        require(c1 >= c0, "ERR_DIV_INTERNAL"); //  badd require
+        uint c2 = c1 / b;
+        return c2;
     }
 
     function _buildSortIndices(uint256[] memory invs)

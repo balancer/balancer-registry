@@ -15,38 +15,46 @@ pragma solidity 0.5.12;
 pragma experimental ABIEncoderV2;
 
 import "@nomiclabs/buidler/console.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/ownership/Ownable.sol";
 
-contract PoolInterface {
+interface PoolInterface {
     function swapExactAmountIn(address, uint, address, uint, uint) external returns (uint, uint);
     function swapExactAmountOut(address, uint, address, uint, uint) external returns (uint, uint);
-    function calcInGivenOut(uint, uint, uint, uint, uint, uint) public pure returns (uint);
+    function calcInGivenOut(uint, uint, uint, uint, uint, uint) external pure returns (uint);
+    function calcOutGivenIn(uint, uint, uint, uint, uint, uint) external pure returns (uint);
     function getDenormalizedWeight(address) external view returns (uint);
     function getBalance(address) external view returns (uint);
     function getSwapFee() external view returns (uint);
 }
 
-contract TokenInterface {
-    function balanceOf(address) public view returns (uint);
-    function allowance(address, address) public view returns (uint);
-    function approve(address, uint) public returns (bool);
-    function transfer(address, uint) public returns (bool);
-    function transferFrom(address, address, uint) public returns (bool);
-    function deposit() public payable;
-    function withdraw(uint) public;
+interface TokenInterface {
+    function balanceOf(address) external view returns (uint);
+    function allowance(address, address) external view returns (uint);
+    function approve(address, uint) external returns (bool);
+    function transfer(address, uint) external returns (bool);
+    function transferFrom(address, address, uint) external returns (bool);
+    function deposit() external payable;
+    function withdraw(uint) external;
 }
 
-contract SmartOrderRouterInterface {
-    struct Swap {
+interface RegistryInterface {
+    function getBestPoolsWithLimit(address, address, uint) external view returns (address[] memory);
+}
+
+contract ExchangeProxy is Ownable {
+
+    using SafeMath for uint256;
+
+    struct Pool {
         address pool;
-        uint    tokenInParam; // tokenInAmount / maxAmountIn / limitAmountIn
-        uint    tokenOutParam; // minAmountOut / tokenAmountOut / limitAmountOut
-        uint    maxPrice;
+        uint    tokenBalanceIn;
+        uint    tokenWeightIn;
+        uint    tokenBalanceOut;
+        uint    tokenWeightOut;
+        uint    swapFee;
+        uint    slippageSlopeEffectivePrice;
     }
-
-    function viewSplit(bool, address, address, uint, uint) public view returns (Swap[] memory, uint);
-}
-
-contract ExchangeProxy {
 
     struct Swap {
         address pool;
@@ -57,268 +65,92 @@ contract ExchangeProxy {
         uint    maxPrice;
     }
 
-    struct SwapDirect {
-        address pool;
-        uint    tokenInParam; // tokenInAmount / maxAmountIn / limitAmountIn
-        uint    tokenOutParam; // minAmountOut / tokenAmountOut / limitAmountOut
-        uint    maxPrice;
-    }
-
     TokenInterface weth;
+    RegistryInterface registry;
     address private constant ETH_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
+    uint private constant BONE = 10**18;
 
     constructor(address _weth) public {
         weth = TokenInterface(_weth);
     }
 
-    function add(uint a, uint b) internal pure returns (uint) {
-        uint c = a + b;
-        require(c >= a, "ERR_ADD_OVERFLOW");
-        return c;
+    function setRegistry(address _registry) external onlyOwner {
+        registry = RegistryInterface(_registry);
     }
 
     function batchSwapExactIn(
-        SwapDirect[] memory swaps,
-        address tokenIn,
-        address tokenOut,
+        Swap[] memory swaps,
+        TokenInterface tokenIn,
+        TokenInterface tokenOut,
         uint totalAmountIn,
         uint minTotalAmountOut
     )
-        public
+        public payable
         returns (uint totalAmountOut)
     {
-        TokenInterface TI = TokenInterface(tokenIn);
-        TokenInterface TO = TokenInterface(tokenOut);
-        require(TI.transferFrom(msg.sender, address(this), totalAmountIn), "ERR_TRANSFER_FAILED");
-        for (uint i = 0; i < swaps.length; i++) {
-            SwapDirect memory swap = swaps[i];
+        transferFromAll(tokenIn, totalAmountIn);
 
+        for (uint i = 0; i < swaps.length; i++) {
+            Swap memory swap = swaps[i];
+            TokenInterface SwapTokenIn = TokenInterface(swap.tokenIn);
             PoolInterface pool = PoolInterface(swap.pool);
-            if (TI.allowance(address(this), swap.pool) < totalAmountIn) {
-                TI.approve(swap.pool, uint(-1));
+
+            if (SwapTokenIn.allowance(address(this), swap.pool) > 0) {
+                SwapTokenIn.approve(swap.pool, 0);
             }
+            SwapTokenIn.approve(swap.pool, swap.swapAmount);
+
             (uint tokenAmountOut,) = pool.swapExactAmountIn(
-                                        tokenIn,
-                                        swap.tokenInParam,
-                                        tokenOut,
-                                        swap.tokenOutParam,
+                                        swap.tokenIn,
+                                        swap.swapAmount,
+                                        swap.tokenOut,
+                                        swap.limitReturnAmount,
                                         swap.maxPrice
                                     );
-            totalAmountOut = add(tokenAmountOut, totalAmountOut);
+            totalAmountOut = tokenAmountOut.add(totalAmountOut);
         }
+
         require(totalAmountOut >= minTotalAmountOut, "ERR_LIMIT_OUT");
-        require(TO.transfer(msg.sender, TO.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-        require(TI.transfer(msg.sender, TI.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-        return totalAmountOut;
+
+        transferAll(tokenOut, totalAmountOut);
+        transferAll(tokenIn, getBalance(tokenIn));
     }
 
     function batchSwapExactOut(
-        SwapDirect[] memory swaps,
-        address tokenIn,
-        address tokenOut,
+        Swap[] memory swaps,
+        TokenInterface tokenIn,
+        TokenInterface tokenOut,
         uint maxTotalAmountIn
-    )
-        public
-        returns (uint totalAmountIn)
-    {
-        TokenInterface TI = TokenInterface(tokenIn);
-        TokenInterface TO = TokenInterface(tokenOut);
-        require(TI.transferFrom(msg.sender, address(this), maxTotalAmountIn), "ERR_TRANSFER_FAILED");
-        for (uint i = 0; i < swaps.length; i++) {
-            SwapDirect memory swap = swaps[i];
-            PoolInterface pool = PoolInterface(swap.pool);
-            if (TI.allowance(address(this), swap.pool) < maxTotalAmountIn) {
-                TI.approve(swap.pool, uint(-1));
-            }
-            (uint tokenAmountIn,) = pool.swapExactAmountOut(
-                                        tokenIn,
-                                        swap.tokenInParam,
-                                        tokenOut,
-                                        swap.tokenOutParam,
-                                        swap.maxPrice
-                                    );
-            totalAmountIn = add(tokenAmountIn, totalAmountIn);
-        }
-        require(totalAmountIn <= maxTotalAmountIn, "ERR_LIMIT_IN");
-        require(TO.transfer(msg.sender, TO.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-        require(TI.transfer(msg.sender, TI.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-        return totalAmountIn;
-    }
-
-    function batchEthInSwapExactIn(
-    SwapDirect[] memory swaps,
-    address tokenOut,
-    uint minTotalAmountOut
-    )
-        public payable
-        returns (uint totalAmountOut)
-    {
-        TokenInterface TO = TokenInterface(tokenOut);
-        weth.deposit.value(msg.value)();
-        for (uint i = 0; i < swaps.length; i++) {
-            SwapDirect memory swap = swaps[i];
-            PoolInterface pool = PoolInterface(swap.pool);
-            if (weth.allowance(address(this), swap.pool) < msg.value) {
-                weth.approve(swap.pool, uint(-1));
-            }
-            (uint tokenAmountOut,) = pool.swapExactAmountIn(
-                                        address(weth),
-                                        swap.tokenInParam,
-                                        tokenOut,
-                                        swap.tokenOutParam,
-                                        swap.maxPrice
-                                    );
-            totalAmountOut = add(tokenAmountOut, totalAmountOut);
-        }
-        require(totalAmountOut >= minTotalAmountOut, "ERR_LIMIT_OUT");
-        require(TO.transfer(msg.sender, TO.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-        uint wethBalance = weth.balanceOf(address(this));
-        if (wethBalance > 0) {
-            weth.withdraw(wethBalance);
-            (bool xfer,) = msg.sender.call.value(wethBalance)("");
-            require(xfer, "ERR_ETH_FAILED");
-        }
-        return totalAmountOut;
-    }
-
-    function batchEthOutSwapExactIn(
-        SwapDirect[] memory swaps,
-        address tokenIn,
-        uint totalAmountIn,
-        uint minTotalAmountOut
-    )
-        public
-        returns (uint totalAmountOut)
-    {
-        TokenInterface TI = TokenInterface(tokenIn);
-        require(TI.transferFrom(msg.sender, address(this), totalAmountIn), "ERR_TRANSFER_FAILED");
-        for (uint i = 0; i < swaps.length; i++) {
-            SwapDirect memory swap = swaps[i];
-            PoolInterface pool = PoolInterface(swap.pool);
-            if (TI.allowance(address(this), swap.pool) < totalAmountIn) {
-                TI.approve(swap.pool, uint(-1));
-            }
-            (uint tokenAmountOut,) = pool.swapExactAmountIn(
-                                        tokenIn,
-                                        swap.tokenInParam,
-                                        address(weth),
-                                        swap.tokenOutParam,
-                                        swap.maxPrice
-                                    );
-
-            totalAmountOut = add(tokenAmountOut, totalAmountOut);
-        }
-        require(totalAmountOut >= minTotalAmountOut, "ERR_LIMIT_OUT");
-        uint wethBalance = weth.balanceOf(address(this));
-        weth.withdraw(wethBalance);
-        (bool xfer,) = msg.sender.call.value(wethBalance)("");
-        require(xfer, "ERR_ETH_FAILED");
-        require(TI.transfer(msg.sender, TI.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-        return totalAmountOut;
-    }
-
-    function batchEthInSwapExactOut(
-        SwapDirect[] memory swaps,
-        address tokenOut
     )
         public payable
         returns (uint totalAmountIn)
     {
-        TokenInterface TO = TokenInterface(tokenOut);
-        weth.deposit.value(msg.value)();
+        transferFromAll(tokenIn, maxTotalAmountIn);
+
         for (uint i = 0; i < swaps.length; i++) {
-            SwapDirect memory swap = swaps[i];
+            Swap memory swap = swaps[i];
+            TokenInterface SwapTokenIn = TokenInterface(swap.tokenIn);
             PoolInterface pool = PoolInterface(swap.pool);
-            if (weth.allowance(address(this), swap.pool) < msg.value) {
-                weth.approve(swap.pool, uint(-1));
+
+            if (SwapTokenIn.allowance(address(this), swap.pool) > 0) {
+                SwapTokenIn.approve(swap.pool, 0);
             }
+            SwapTokenIn.approve(swap.pool, swap.limitReturnAmount);
+
             (uint tokenAmountIn,) = pool.swapExactAmountOut(
-                                        address(weth),
-                                        swap.tokenInParam,
-                                        tokenOut,
-                                        swap.tokenOutParam,
+                                        swap.tokenIn,
+                                        swap.limitReturnAmount,
+                                        swap.tokenOut,
+                                        swap.swapAmount,
                                         swap.maxPrice
                                     );
-
-            totalAmountIn = add(tokenAmountIn, totalAmountIn);
-        }
-        require(TO.transfer(msg.sender, TO.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-        uint wethBalance = weth.balanceOf(address(this));
-        if (wethBalance > 0) {
-            weth.withdraw(wethBalance);
-            (bool xfer,) = msg.sender.call.value(wethBalance)("");
-            require(xfer, "ERR_ETH_FAILED");
-        }
-        return totalAmountIn;
-    }
-
-    function batchEthOutSwapExactOut(
-        SwapDirect[] memory swaps,
-        address tokenIn,
-        uint maxTotalAmountIn
-    )
-        public
-        returns (uint totalAmountIn)
-    {
-        TokenInterface TI = TokenInterface(tokenIn);
-        require(TI.transferFrom(msg.sender, address(this), maxTotalAmountIn), "ERR_TRANSFER_FAILED");
-        for (uint i = 0; i < swaps.length; i++) {
-            SwapDirect memory swap = swaps[i];
-            PoolInterface pool = PoolInterface(swap.pool);
-            if (TI.allowance(address(this), swap.pool) < maxTotalAmountIn) {
-                TI.approve(swap.pool, uint(-1));
-            }
-            (uint tokenAmountIn,) = pool.swapExactAmountOut(
-                                        tokenIn,
-                                        swap.tokenInParam,
-                                        address(weth),
-                                        swap.tokenOutParam,
-                                        swap.maxPrice
-                                    );
-
-            totalAmountIn = add(tokenAmountIn, totalAmountIn);
+            totalAmountIn = tokenAmountIn.add(totalAmountIn);
         }
         require(totalAmountIn <= maxTotalAmountIn, "ERR_LIMIT_IN");
-        require(TI.transfer(msg.sender, TI.balanceOf(address(this))), "ERR_TRANSFER_FAILED");
-        uint wethBalance = weth.balanceOf(address(this));
-        weth.withdraw(wethBalance);
-        (bool xfer,) = msg.sender.call.value(wethBalance)("");
-        require(xfer, "ERR_ETH_FAILED");
-        return totalAmountIn;
-    }
 
-    function transferFromAll(TokenInterface token, uint256 amount) internal returns(bool) {
-        if (isETH(token)) {
-            weth.deposit.value(msg.value)();
-        } else {
-            require(token.transferFrom(msg.sender, address(this), amount), "ERR_TRANSFER_FAILED");
-        }
-    }
+        transferAll(tokenOut, getBalance(tokenOut));
+        transferAll(tokenIn, getBalance(tokenIn));
 
-    function getBalance(TokenInterface token) internal view returns (uint256) {
-        if (isETH(token)) {
-            return address(this).balance;
-        } else {
-            return token.balanceOf(address(this));
-        }
-    }
-
-    function transferAll(TokenInterface token, uint256 amount) internal returns(bool) {
-        if (amount == 0) {
-            return true;
-        }
-
-        if (isETH(token)) {
-            weth.withdraw(amount);
-            (bool xfer,) = msg.sender.call.value(amount)("");
-            require(xfer, "ERR_ETH_FAILED");
-        } else {
-            require(token.transfer(msg.sender, amount), "ERR_TRANSFER_FAILED");
-        }
-    }
-
-    function isETH(TokenInterface token) internal pure returns(bool) {
-        return (address(token) == ETH_ADDRESS);
     }
 
     function multihopBatchSwapExactIn(
@@ -359,7 +191,7 @@ contract ExchangeProxy {
                                         );
             }
             // This takes the amountOut of the last swap
-            totalAmountOut = add(tokenAmountOut, totalAmountOut);
+            totalAmountOut = tokenAmountOut.add(totalAmountOut);
         }
 
         require(totalAmountOut >= minTotalAmountOut, "ERR_LIMIT_OUT");
@@ -447,7 +279,7 @@ contract ExchangeProxy {
                                         secondSwap.maxPrice
                                     );
             }
-            totalAmountIn = add(tokenAmountInFirstSwap, totalAmountIn);
+            totalAmountIn = tokenAmountInFirstSwap.add(totalAmountIn);
         }
 
         require(totalAmountIn <= maxTotalAmountIn, "ERR_LIMIT_IN");
@@ -458,118 +290,228 @@ contract ExchangeProxy {
     }
 
     function smartSwapExactIn(
-        address sorAddress,
-        address tokenIn,
-        address tokenOut,
+        TokenInterface tokenIn,
+        TokenInterface tokenOut,
         uint totalAmountIn,
+        uint minTotalAmountOut,
         uint nPools
     )
         public payable
         returns (uint totalAmountOut)
     {
-        TokenInterface swapTokenIn = TokenInterface(tokenIn);
-        TokenInterface swapTokenOut = TokenInterface(tokenOut);
-
-        SmartOrderRouterInterface sor = SmartOrderRouterInterface(sorAddress);
-
-        SmartOrderRouterInterface.Swap[] memory swaps;
-        uint minTotalAmountOut;
-
-        // SOR doesn't currently support ETH/WETH directly
-        if (isETH(swapTokenIn)) {
-          (swaps, minTotalAmountOut) = sor.viewSplit(true, address(weth), tokenOut, totalAmountIn, nPools);
-        } else if (isETH(swapTokenOut)){
-          (swaps, minTotalAmountOut) = sor.viewSplit(true, tokenIn, address(weth), totalAmountIn, nPools);
+        Swap[] memory swaps;
+        if (isETH(tokenIn)) {
+          (swaps,) = viewSplitExactIn(address(weth), address(tokenOut), totalAmountIn, nPools);
+        } else if (isETH(tokenOut)){
+          (swaps,) = viewSplitExactIn(address(tokenIn), address(weth), totalAmountIn, nPools);
         } else {
-          (swaps, minTotalAmountOut) = sor.viewSplit(true, tokenIn, tokenOut, totalAmountIn, nPools);
+          (swaps,) = viewSplitExactIn(address(tokenIn), address(tokenOut), totalAmountIn, nPools);
         }
 
-        // !!!!!!! not sure why I can't use directly as same structure?
-        SwapDirect[] memory swapsLocal;
-        swapsLocal = new SwapDirect[](swaps.length);
-        for (uint i = 0; i < swaps.length; i++) {
-          swapsLocal[i] = SwapDirect(swaps[i].pool, swaps[i].tokenInParam, swaps[i].tokenOutParam, swaps[i].maxPrice);
+        totalAmountOut = batchSwapExactIn(swaps, tokenIn, tokenOut, totalAmountIn, minTotalAmountOut);
+
+    }
+
+    // function smartSwapExactOut(
+    //     TokenInterface tokenIn,
+    //     TokenInterface tokenOut,
+    //     uint totalAmountOut,
+    //     uint maxTotalAmountIn,
+    //     uint nPools
+    // )
+    //     public payable
+    //     returns (uint totalAmountIn)
+    // {
+    //     Swap[] memory swaps;
+    //     if (isETH(tokenIn)) {
+    //       (swaps,) = viewSplit(false, address(weth), tokenOut, totalAmountOut, nPools);
+    //     } else if (isETH(tokenOut)){
+    //       (swaps,) = viewSplit(false, tokenIn, address(weth), totalAmountOut, nPools);
+    //     } else {
+    //       (swaps,) = viewSplit(false, tokenIn, tokenOut, totalAmountOut, nPools);
+    //     }
+
+    //     totalAmountIn = batchSwapExactOut(swaps, tokenIn, tokenOut, maxTotalAmountIn);
+
+    // }
+
+    function viewSplitExactIn(
+        address tokenIn,
+        address tokenOut,
+        uint swapAmount,
+        uint nPools
+    )
+        public view
+        returns (Swap[] memory swaps, uint totalOutput)
+    {
+        address[] memory poolAddresses = registry.getBestPoolsWithLimit(tokenIn, tokenOut, nPools);
+        Pool[] memory pools = new Pool[](poolAddresses.length);
+        uint sumLiquidity;
+        for (uint i = 0; i < poolAddresses.length; i++) {
+            pools[i] = getPoolData(tokenIn, tokenOut, poolAddresses[i]);
+            sumLiquidity = sumLiquidity.add(pools[i].slippageSlopeEffectivePrice);
         }
 
-        // !!!!!!! this might not be most efficient but reuses existing proxy code?
-        if (isETH(swapTokenIn)) {
-            totalAmountOut = batchEthInSwapExactIn(
-                swapsLocal,
-                tokenOut,
-                minTotalAmountOut
-            );
-        } else if (isETH(swapTokenOut)){
-            totalAmountOut = batchEthOutSwapExactIn(
-                swapsLocal,
-                tokenIn,
-                totalAmountIn,
-                minTotalAmountOut
-            );
-        } else{
-            totalAmountOut = batchSwapExactIn(
-                swapsLocal,
-                tokenIn,
-                tokenOut,
-                totalAmountIn,
-                minTotalAmountOut
-            );
+        uint[] memory bestInputAmounts = new uint[](pools.length);
+        for (uint i = 0; i < pools.length; i++) {
+            bestInputAmounts[i] = swapAmount.mul(pools[i].slippageSlopeEffectivePrice.div(sumLiquidity));
+        }
+
+        swaps = new Swap[](pools.length);
+
+        for (uint i = 0; i < pools.length; i++) {
+            swaps[i] = Swap({
+                        pool: pools[i].pool,
+                        tokenIn: tokenIn,
+                        tokenOut: tokenOut,
+                        swapAmount: bestInputAmounts[i],
+                        limitReturnAmount: 0,
+                        maxPrice: uint(-1)
+                    });
+        }
+
+        totalOutput = calcTotalOutExactIn(bestInputAmounts, pools);
+
+        return (swaps, totalOutput);
+    }
+
+    function getPoolData(
+        address tokenIn,
+        address tokenOut,
+        address poolAddress
+    )
+        public view
+        returns (Pool memory)
+    {
+        PoolInterface pool = PoolInterface(poolAddress);
+        uint tokenBalanceIn = pool.getBalance(tokenIn);
+        uint tokenBalanceOut = pool.getBalance(tokenOut);
+        uint tokenWeightIn = pool.getDenormalizedWeight(tokenIn);
+        uint tokenWeightOut = pool.getDenormalizedWeight(tokenOut);
+        uint swapFee = pool.getSwapFee();
+
+        uint slippageSlopeEffectivePrice = calcSlippageSlopeEffectivePrice(
+                                            tokenWeightIn,
+                                            tokenBalanceOut,
+                                            tokenWeightOut
+                                        );
+        Pool memory returnPool = Pool({
+            pool: poolAddress,
+            tokenBalanceIn: tokenBalanceIn,
+            tokenWeightIn: tokenWeightIn,
+            tokenBalanceOut: tokenBalanceOut,
+            tokenWeightOut: tokenWeightOut,
+            swapFee: swapFee,
+            slippageSlopeEffectivePrice: slippageSlopeEffectivePrice
+        });
+
+        return returnPool;
+    }
+
+    function calcSlippageSlopeEffectivePrice(
+        uint tokenWeightIn,
+        uint tokenBalanceOut,
+        uint tokenWeightOut
+    )
+        public pure
+        returns (uint slippageSlopeEffectivePrice)
+    {
+
+        // (wo/wi+1)/(2*Bo)
+        slippageSlopeEffectivePrice = bdiv(
+            bdiv(
+                tokenWeightOut,
+                tokenWeightIn
+            ).add(BONE),
+            bmul(
+                2*BONE,
+                tokenBalanceOut
+            )
+        );
+
+        return slippageSlopeEffectivePrice;
+    }
+
+    function calcTotalOutExactIn(
+        uint[] memory bestInputAmounts,
+        Pool[] memory bestPools
+    )
+        public pure
+        returns (uint totalOutput)
+    {
+        totalOutput = 0;
+        for (uint i = 0; i < bestInputAmounts.length; i++) {
+            uint output = PoolInterface(bestPools[i].pool).calcOutGivenIn(
+                                bestPools[i].tokenBalanceIn,
+                                bestPools[i].tokenWeightIn,
+                                bestPools[i].tokenBalanceOut,
+                                bestPools[i].tokenWeightOut,
+                                bestInputAmounts[i],
+                                bestPools[i].swapFee
+                            );
+
+            totalOutput = totalOutput.add(output);
+        }
+        return totalOutput;
+    }
+
+    function transferFromAll(TokenInterface token, uint256 amount) internal returns(bool) {
+        if (isETH(token)) {
+            weth.deposit.value(msg.value)();
+        } else {
+            require(token.transferFrom(msg.sender, address(this), amount), "ERR_TRANSFER_FAILED");
         }
     }
 
-    function smartSwapExactOut(
-        address sorAddress,
-        address tokenIn,
-        address tokenOut,
-        uint totalAmountOut,
-        uint nPools
-    )
-        public payable
-        returns (uint totalAmountIn)
-    {
-        TokenInterface swapTokenIn = TokenInterface(tokenIn);
-        TokenInterface swapTokenOut = TokenInterface(tokenOut);
-
-        SmartOrderRouterInterface sor = SmartOrderRouterInterface(sorAddress);
-
-        SmartOrderRouterInterface.Swap[] memory swaps;
-        uint maxTotalAmountIn;
-
-        // SOR doesn't currently support ETH/WETH directly
-        if (isETH(swapTokenIn)) {
-          (swaps, maxTotalAmountIn) = sor.viewSplit(false, address(weth), tokenOut, totalAmountOut, nPools);
-        } else if (isETH(swapTokenOut)){
-          (swaps, maxTotalAmountIn) = sor.viewSplit(false, tokenIn, address(weth), totalAmountOut, nPools);
+    function getBalance(TokenInterface token) internal view returns (uint256) {
+        if (isETH(token)) {
+            return address(this).balance;
         } else {
-          (swaps, maxTotalAmountIn) = sor.viewSplit(false, tokenIn, tokenOut, totalAmountOut, nPools);
+            return token.balanceOf(address(this));
+        }
+    }
+
+    function transferAll(TokenInterface token, uint256 amount) internal returns(bool) {
+        if (amount == 0) {
+            return true;
         }
 
-        // !!!!!!! not sure why I can't use directly as same structure?
-        SwapDirect[] memory swapsLocal;
-        swapsLocal = new SwapDirect[](swaps.length);
-        for (uint i = 0; i < swaps.length; i++) {
-          swapsLocal[i] = SwapDirect(swaps[i].pool, swaps[i].tokenInParam, swaps[i].tokenOutParam, swaps[i].maxPrice);
+        if (isETH(token)) {
+            weth.withdraw(amount);
+            (bool xfer,) = msg.sender.call.value(amount)("");
+            require(xfer, "ERR_ETH_FAILED");
+        } else {
+            require(token.transfer(msg.sender, amount), "ERR_TRANSFER_FAILED");
         }
+    }
 
-        // !!!!!!! this might not be most efficient but reuses existing proxy code?
-        if (isETH(swapTokenIn)) {
-            totalAmountIn = batchEthInSwapExactOut(
-                swapsLocal,
-                tokenOut
-            );
-        } else if (isETH(swapTokenOut)){
-            totalAmountIn = batchEthOutSwapExactOut(
-                swapsLocal,
-                tokenIn,
-                maxTotalAmountIn
-            );
-        } else{
-            totalAmountIn = batchSwapExactOut(
-                swapsLocal,
-                tokenIn,
-                tokenOut,
-                maxTotalAmountIn
-            );
-        }
+    function isETH(TokenInterface token) internal pure returns(bool) {
+        return (address(token) == ETH_ADDRESS);
+    }
+
+    function bmul(uint a, uint b)
+        internal pure
+        returns (uint)
+    {
+        uint c0 = a * b;
+        require(a == 0 || c0 / a == b, "ERR_MUL_OVERFLOW");
+        uint c1 = c0 + (BONE / 2);
+        require(c1 >= c0, "ERR_MUL_OVERFLOW");
+        uint c2 = c1 / BONE;
+        return c2;
+    }
+
+    function bdiv(uint a, uint b)
+        internal pure
+        returns (uint)
+    {
+        require(b != 0, "ERR_DIV_ZERO");
+        uint c0 = a * BONE;
+        require(a == 0 || c0 / a == BONE, "ERR_DIV_INTERNAL"); // bmul overflow
+        uint c1 = c0 + (b / 2);
+        require(c1 >= c0, "ERR_DIV_INTERNAL"); //  badd require
+        uint c2 = c1 / b;
+        return c2;
     }
 
     function() external payable {}
