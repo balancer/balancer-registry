@@ -114,30 +114,34 @@ describe('ExchangeProxy SmartSwaps', async () => {
             const swaps = [
                 [
                     POOL1,
+                    WETH,
+                    DAI,
                     toWei('0.5'),
                     toWei('0'),
                     MAX,
                 ],
                 [
                     POOL2,
+                    WETH,
+                    DAI,
                     toWei('0.5'),
                     toWei('0'),
                     MAX,
                 ],
                 [
                     POOL3,
+                    WETH,
+                    DAI,
                     toWei('1'),
                     toWei('0'),
                     MAX,
                 ],
             ];
             const swapFee = fromWei(await pool1.getSwapFee());
-
             const totalAmountIn = toWei('2');
-            const numberPools = toWei('4');
 
             const totalAmountOut = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactIn(
-                swaps, WETH, DAI, totalAmountIn, numberPools,
+                swaps, WETH, DAI, totalAmountIn, 0,
                 { from: nonAdmin }
             );
 
@@ -157,33 +161,41 @@ describe('ExchangeProxy SmartSwaps', async () => {
             }
 
             assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
+
         });
 
         it('batchSwapExactOut dry', async () => {
             const swaps = [
                 [
                     POOL1,
-                    toWei('1'),
-                    toWei('100'),
+                    WETH,
+                    DAI,
+                    toWei('100'),   // swapAmount
+                    toWei('1'),     // limitReturnAmount
                     MAX,
                 ],
                 [
                     POOL2,
-                    toWei('1'),
+                    WETH,
+                    DAI,
                     toWei('100'),
+                    toWei('1'),
                     MAX,
                 ],
                 [
                     POOL3,
-                    toWei('5'),
+                    WETH,
+                    DAI,
                     toWei('500'),
+                    toWei('5'),
                     MAX,
                 ],
             ];
 
             const swapFee = fromWei(await pool1.getSwapFee());
+            const maxIn = toWei('7');
             const totalAmountIn = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactOut(
-                swaps, WETH, DAI, toWei('7'),
+                swaps, WETH, DAI, maxIn,
                 { from: nonAdmin },
             );
 
@@ -208,28 +220,39 @@ describe('ExchangeProxy SmartSwaps', async () => {
             const swaps = [
                 [
                     POOL1,
+                    WETH,
+                    DAI,
                     toWei('0.5'),
                     toWei('0'),
                     MAX,
                 ],
                 [
                     POOL2,
+                    WETH,
+                    DAI,
                     toWei('0.5'),
                     toWei('0'),
                     MAX,
                 ],
                 [
                     POOL3,
+                    WETH,
+                    DAI,
                     toWei('1'),
                     toWei('0'),
                     MAX,
                 ],
             ];
 
+            const totalAmountIn = toWei('2');
             const swapFee = fromWei(await pool1.getSwapFee());
-            const totalAmountOut = await proxy.connect(nonAdminSigner).callStatic.batchEthInSwapExactIn(
-                swaps, DAI, toWei('0'),
-                { from: nonAdmin, value: toWei('2') },
+
+            const totalAmountOut = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactIn(
+                swaps, ETH, DAI, totalAmountIn, toWei('0'),
+                {
+                  from: nonAdmin,
+                  value: totalAmountIn
+                },
             );
 
             const pool1Out = calcOutGivenIn(6, 5, 1200, 5, 0.5, swapFee);
@@ -253,27 +276,35 @@ describe('ExchangeProxy SmartSwaps', async () => {
             const swaps = [
                 [
                     POOL1,
+                    DAI,
+                    WETH,
                     toWei('30'),
                     toWei('0'),
                     MAX,
                 ],
                 [
                     POOL2,
+                    DAI,
+                    WETH,
                     toWei('45'),
                     toWei('0'),
                     MAX,
                 ],
                 [
                     POOL3,
+                    DAI,
+                    WETH,
                     toWei('75'),
                     toWei('0'),
                     MAX,
                 ],
             ];
 
+            const totalAmountIn = toWei('150');
             const swapFee = fromWei(await pool1.getSwapFee());
-            const totalAmountOut = await proxy.connect(nonAdminSigner).callStatic.batchEthOutSwapExactIn(
-                swaps, DAI, toWei('150'), toWei('0.5'),
+
+            const totalAmountOut = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactIn(
+                swaps, DAI, ETH, totalAmountIn, toWei('0.5'),
                 { from: nonAdmin },
             );
 
@@ -298,28 +329,38 @@ describe('ExchangeProxy SmartSwaps', async () => {
             const swaps = [
                 [
                     POOL1,
-                    toWei('1'),
+                    WETH,
+                    DAI,
                     toWei('100'),
+                    toWei('1'),
                     MAX,
                 ],
                 [
                     POOL2,
-                    toWei('1'),
+                    WETH,
+                    DAI,
                     toWei('100'),
+                    toWei('1'),
                     MAX,
                 ],
                 [
                     POOL3,
-                    toWei('5'),
+                    WETH,
+                    DAI,
                     toWei('500'),
+                    toWei('5'),
                     MAX,
                 ],
             ];
 
             const swapFee = fromWei(await pool1.getSwapFee());
-            const totalAmountIn = await proxy.connect(nonAdminSigner).callStatic.batchEthInSwapExactOut(
-                swaps, DAI,
-                { from: nonAdmin, value: toWei('7.5') },
+            const maxIn = toWei('7.5');
+            const totalAmountIn = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactOut(
+                swaps, ETH, DAI, maxIn,
+                {
+                  from: nonAdmin,
+                  value: maxIn
+                },
             );
 
             const pool1In = calcInGivenOut(6, 5, 1200, 5, 100, swapFee);
@@ -343,27 +384,35 @@ describe('ExchangeProxy SmartSwaps', async () => {
             const swaps = [
                 [
                     POOL1,
-                    toWei('150'),
+                    DAI,
+                    WETH,
                     toWei('0.5'),
+                    toWei('150'),
                     MAX,
                 ],
                 [
                     POOL2,
-                    toWei('150'),
+                    DAI,
+                    WETH,
                     toWei('0.5'),
+                    toWei('150'),
                     MAX,
                 ],
                 [
                     POOL3,
-                    toWei('550'),
+                    DAI,
+                    WETH,
                     toWei('2.5'),
+                    toWei('550'),
                     MAX,
                 ],
             ];
 
             const swapFee = fromWei(await pool1.getSwapFee());
-            const totalAmountIn = await proxy.connect(nonAdminSigner).callStatic.batchEthOutSwapExactOut(
-                swaps, DAI, toWei('750'),
+            const maxIn = toWei('750');
+
+            const totalAmountIn = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactOut(
+                swaps, DAI, ETH, maxIn,
                 { from: nonAdmin },
             );
 
