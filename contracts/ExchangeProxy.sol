@@ -311,28 +311,27 @@ contract ExchangeProxy is Ownable {
         totalAmountOut = batchSwapExactIn(swaps, tokenIn, tokenOut, totalAmountIn, minTotalAmountOut);
     }
 
-    // function smartSwapExactOut(
-    //     TokenInterface tokenIn,
-    //     TokenInterface tokenOut,
-    //     uint totalAmountOut,
-    //     uint maxTotalAmountIn,
-    //     uint nPools
-    // )
-    //     public payable
-    //     returns (uint totalAmountIn)
-    // {
-    //     Swap[] memory swaps;
-    //     if (isETH(tokenIn)) {
-    //       (swaps,) = viewSplit(false, address(weth), tokenOut, totalAmountOut, nPools);
-    //     } else if (isETH(tokenOut)){
-    //       (swaps,) = viewSplit(false, tokenIn, address(weth), totalAmountOut, nPools);
-    //     } else {
-    //       (swaps,) = viewSplit(false, tokenIn, tokenOut, totalAmountOut, nPools);
-    //     }
+    function smartSwapExactOut(
+        TokenInterface tokenIn,
+        TokenInterface tokenOut,
+        uint totalAmountOut,
+        uint maxTotalAmountIn,
+        uint nPools
+    )
+        public payable
+        returns (uint totalAmountIn)
+    {
+        Swap[] memory swaps;
+        if (isETH(tokenIn)) {
+          (swaps,) = viewSplitExactOut(address(weth), address(tokenOut), totalAmountOut, nPools);
+        } else if (isETH(tokenOut)){
+          (swaps,) = viewSplitExactOut(address(tokenIn), address(weth), totalAmountOut, nPools);
+        } else {
+          (swaps,) = viewSplitExactOut(address(tokenIn), address(tokenOut), totalAmountOut, nPools);
+        }
 
-    //     totalAmountIn = batchSwapExactOut(swaps, tokenIn, tokenOut, maxTotalAmountIn);
-
-    // }
+        totalAmountIn = batchSwapExactOut(swaps, tokenIn, tokenOut, maxTotalAmountIn);
+    }
 
     function viewSplitExactIn(
         address tokenIn,
@@ -371,6 +370,47 @@ contract ExchangeProxy is Ownable {
         }
 
         totalOutput = calcTotalOutExactIn(bestInputAmounts, pools);
+
+        return (swaps, totalOutput);
+    }
+
+    function viewSplitExactOut(
+        address tokenIn,
+        address tokenOut,
+        uint swapAmount,
+        uint nPools
+    )
+        public view
+        returns (Swap[] memory swaps, uint totalOutput)
+    {
+        address[] memory poolAddresses = registry.getBestPoolsWithLimit(tokenIn, tokenOut, nPools);
+
+        Pool[] memory pools = new Pool[](poolAddresses.length);
+        uint sumLiquidity;
+        for (uint i = 0; i < poolAddresses.length; i++) {
+            pools[i] = getPoolData(tokenIn, tokenOut, poolAddresses[i]);
+            sumLiquidity = sumLiquidity.add(pools[i].slippageSlopeEffectivePrice);
+        }
+
+        uint[] memory bestInputAmounts = new uint[](pools.length);
+        for (uint i = 0; i < pools.length; i++) {
+            bestInputAmounts[i] = bmul(swapAmount, bdiv(pools[i].slippageSlopeEffectivePrice, sumLiquidity));//swapAmount.mul(pools[i].slippageSlopeEffectivePrice.div(sumLiquidity));
+        }
+        bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
+        swaps = new Swap[](pools.length);
+
+        for (uint i = 0; i < pools.length; i++) {
+            swaps[i] = Swap({
+                        pool: pools[i].pool,
+                        tokenIn: tokenIn,
+                        tokenOut: tokenOut,
+                        swapAmount: bestInputAmounts[i],
+                        limitReturnAmount: uint(-1),
+                        maxPrice: uint(-1)
+                    });
+        }
+
+        totalOutput = calcTotalOutExactOut(bestInputAmounts, pools);
 
         return (swaps, totalOutput);
     }
@@ -478,6 +518,29 @@ contract ExchangeProxy is Ownable {
                             );
 
             totalOutput = totalOutput.add(output);
+        }
+        return totalOutput;
+    }
+
+    function calcTotalOutExactOut(
+        uint[] memory bestInputAmounts,
+        Pool[] memory bestPools
+    )
+        public pure
+        returns (uint totalOutput)
+    {
+        totalOutput = 0;
+        for (uint i = 0; i < bestInputAmounts.length; i++) {
+            uint output = PoolInterface(bestPools[i].pool).calcInGivenOut(
+                                bestPools[i].tokenBalanceIn,
+                                bestPools[i].tokenWeightIn,
+                                bestPools[i].tokenBalanceOut,
+                                bestPools[i].tokenWeightOut,
+                                bestInputAmounts[i],
+                                bestPools[i].swapFee
+                            );
+
+            totalOutput = badd(totalOutput, output);
         }
         return totalOutput;
     }
