@@ -309,7 +309,6 @@ contract ExchangeProxy is Ownable {
         }
 
         totalAmountOut = batchSwapExactIn(swaps, tokenIn, tokenOut, totalAmountIn, minTotalAmountOut);
-
     }
 
     // function smartSwapExactOut(
@@ -345,6 +344,7 @@ contract ExchangeProxy is Ownable {
         returns (Swap[] memory swaps, uint totalOutput)
     {
         address[] memory poolAddresses = registry.getBestPoolsWithLimit(tokenIn, tokenOut, nPools);
+
         Pool[] memory pools = new Pool[](poolAddresses.length);
         uint sumLiquidity;
         for (uint i = 0; i < poolAddresses.length; i++) {
@@ -354,9 +354,9 @@ contract ExchangeProxy is Ownable {
 
         uint[] memory bestInputAmounts = new uint[](pools.length);
         for (uint i = 0; i < pools.length; i++) {
-            bestInputAmounts[i] = swapAmount.mul(pools[i].slippageSlopeEffectivePrice.div(sumLiquidity));
+            bestInputAmounts[i] = bmul(swapAmount, bdiv(pools[i].slippageSlopeEffectivePrice, sumLiquidity));//swapAmount.mul(pools[i].slippageSlopeEffectivePrice.div(sumLiquidity));
         }
-
+        bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
         swaps = new Swap[](pools.length);
 
         for (uint i = 0; i < pools.length; i++) {
@@ -373,6 +373,24 @@ contract ExchangeProxy is Ownable {
         totalOutput = calcTotalOutExactIn(bestInputAmounts, pools);
 
         return (swaps, totalOutput);
+    }
+
+    function calcDust(
+        uint[] memory bestInputAmounts,
+        uint swapAmount
+    )
+        public pure
+        returns (uint[] memory)
+    {
+        uint sumBestInputAmounts = sum(bestInputAmounts);
+
+        // Add dust to the first swapAmount (which is always the greater) if rounding error is negative
+        if (sumBestInputAmounts < swapAmount) {
+            bestInputAmounts[0] = badd(bestInputAmounts[0], bsub(swapAmount, sumBestInputAmounts));
+        } else {
+            bestInputAmounts[0] = bsub(bestInputAmounts[0], bsub(sumBestInputAmounts, swapAmount));
+        }
+        return bestInputAmounts;
     }
 
     function getPoolData(
@@ -430,6 +448,15 @@ contract ExchangeProxy is Ownable {
         );
 
         return slippageSlopeEffectivePrice;
+    }
+
+    function badd(uint a, uint b)
+        internal pure
+        returns (uint)
+    {
+        uint c = a + b;
+        require(c >= a, "ERR_ADD_OVERFLOW");
+        return c;
     }
 
     function calcTotalOutExactIn(
@@ -512,6 +539,37 @@ contract ExchangeProxy is Ownable {
         require(c1 >= c0, "ERR_DIV_INTERNAL"); //  badd require
         uint c2 = c1 / b;
         return c2;
+    }
+
+    function bsubSign(uint a, uint b)
+        internal pure
+        returns (uint, bool)
+    {
+        if (a >= b) {
+            return (a - b, false);
+        } else {
+            return (b - a, true);
+        }
+    }
+
+    function sum(uint[] memory _data)
+      internal pure
+      returns (uint total)
+    {
+        for (uint i = 0; i < _data.length; ++i) {
+            assembly {
+                total := add(total, mload(add(add(_data, 0x20), mul(i, 0x20))))
+            }
+        }
+    }
+
+    function bsub(uint a, uint b)
+        internal pure
+        returns (uint)
+    {
+        (uint c, bool flag) = bsubSign(a, b);
+        require(!flag, "ERR_SUB_UNDERFLOW");
+        return c;
     }
 
     function() external payable {}
