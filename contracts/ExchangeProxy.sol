@@ -26,6 +26,8 @@ interface PoolInterface {
     function getDenormalizedWeight(address) external view returns (uint);
     function getBalance(address) external view returns (uint);
     function getSwapFee() external view returns (uint);
+    function joinswapExternAmountIn(address, uint, uint) external returns (uint);
+    function exitswapExternAmountOut(address, uint, uint) external returns (uint);
 }
 
 interface TokenInterface {
@@ -331,6 +333,58 @@ contract ExchangeProxy is Ownable {
         }
 
         totalAmountIn = batchSwapExactOut(swaps, tokenIn, tokenOut, maxTotalAmountIn);
+    }
+
+    function joinswapExternAmountIn(
+        address poolAddress,
+        TokenInterface tokenIn,
+        uint tokenAmountIn,
+        uint minPoolAmountOut
+    )
+        public payable
+        returns (uint poolAmountOut)
+    {
+        transferFromAll(tokenIn, tokenAmountIn);
+
+        PoolInterface pool = PoolInterface(poolAddress);
+
+        if (isETH(tokenIn)) {
+          poolAmountOut = pool.joinswapExternAmountIn(address(weth), tokenAmountIn, minPoolAmountOut);
+        } else {
+          poolAmountOut = pool.joinswapExternAmountIn(address(tokenIn), tokenAmountIn, minPoolAmountOut);
+        }
+
+        // Returns any remaing tokenIn
+        transferAll(tokenIn, getBalance(tokenIn));
+        // Send pool token
+        TokenInterface poolToken = TokenInterface(poolAddress);
+        transferAll(poolToken, getBalance(poolToken));
+    }
+
+    function exitswapExternAmountOut(
+        address poolAddress,
+        TokenInterface tokenOut,
+        uint tokenAmountOut,
+        uint maxPoolAmountIn
+    )
+        public payable
+        returns (uint poolAmountIn)
+    {
+        TokenInterface poolToken = TokenInterface(poolAddress);
+        transferFromAll(poolToken, maxPoolAmountIn);
+
+        PoolInterface pool = PoolInterface(poolAddress);
+
+        if (isETH(tokenOut)) {
+          poolAmountIn = pool.exitswapExternAmountOut(address(weth), tokenAmountOut, maxPoolAmountIn);
+        } else {
+          poolAmountIn = pool.exitswapExternAmountOut(address(tokenOut), tokenAmountOut, maxPoolAmountIn);
+        }
+
+        // Returns any remaing tokenIn
+        transferAll(poolToken, getBalance(poolToken));
+        // Send pool token
+        transferAll(tokenOut, getBalance(tokenOut));
     }
 
     function viewSplitExactIn(
