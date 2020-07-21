@@ -348,11 +348,18 @@ contract ExchangeProxy is Ownable {
 
         PoolInterface pool = PoolInterface(poolAddress);
 
+        TokenInterface tokenSwap = tokenIn;
+
         if (isETH(tokenIn)) {
-          poolAmountOut = pool.joinswapExternAmountIn(address(weth), tokenAmountIn, minPoolAmountOut);
-        } else {
-          poolAmountOut = pool.joinswapExternAmountIn(address(tokenIn), tokenAmountIn, minPoolAmountOut);
+          tokenSwap = weth;
         }
+
+        if (tokenSwap.allowance(address(this), poolAddress) > 0) {
+            tokenSwap.approve(poolAddress, 0);
+        }
+        tokenSwap.approve(poolAddress, tokenAmountIn);
+
+        poolAmountOut = pool.joinswapExternAmountIn(address(tokenSwap), tokenAmountIn, minPoolAmountOut);
 
         // Returns any remaing tokenIn
         transferAll(tokenIn, getBalance(tokenIn));
