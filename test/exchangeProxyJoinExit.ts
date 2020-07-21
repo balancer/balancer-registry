@@ -150,7 +150,10 @@ describe('ExchangeProxy Smart Swaps', function(){
             _POOLS[1],
             MKR,
             amountIn,
-            toWei('0')
+            toWei('0'),
+            {
+              gasPrice: 0
+            }
         );
 
         const endingMkrBalance = await mkr.balanceOf(newUserAddr);
@@ -158,6 +161,42 @@ describe('ExchangeProxy Smart Swaps', function(){
 
         expect(endingMkrBalance).to.equal(0);
         expect(endingBptBalance).to.equal(poolAmountOut);
+    });
+
+    it('exitswapExternAmountOut, MKR Out', async () => {
+        const [, newUserSigner] = await ethers.getSigners();
+        const newUserAddr = await newUserSigner.getAddress();
+        const amountOut = toWei('100');
+
+        await _pools[1].connect(newUserSigner).approve(PROXY, MAX);
+
+        const startingMkrBalance = await mkr.balanceOf(newUserAddr);
+        const startingBptBalance = await _pools[1].balanceOf(newUserAddr);
+
+        expect(startingMkrBalance).to.equal(0);
+
+        const poolAmountIn = await proxy.connect(newUserSigner).callStatic.exitswapExternAmountOut(
+            _POOLS[1],
+            MKR,
+            amountOut,
+            startingBptBalance
+        );
+
+        await proxy.connect(newUserSigner).exitswapExternAmountOut(
+            _POOLS[1],
+            MKR,
+            amountOut,
+            startingBptBalance,
+            {
+              gasPrice: 0
+            }
+        );
+
+        const endingMkrBalance = await mkr.balanceOf(newUserAddr);
+        const endingBptBalance = await _pools[1].balanceOf(newUserAddr);
+
+        expect(endingMkrBalance).to.equal(amountOut);
+        expect(endingBptBalance).to.equal(startingBptBalance.sub(poolAmountIn));
     });
 
     it('joinswapExternAmountIn, ETH In', async () => {
@@ -194,6 +233,45 @@ describe('ExchangeProxy Smart Swaps', function(){
 
         expect(endingEthBalance).to.equal(startingEthBalance.sub(amountIn));
         expect(poolAmountOut).to.equal(endingBptBalance.sub(startingBptBalance));
+    });
+
+    it('exitswapExternAmountOut, ETH Out', async () => {
+        const [, newUserSigner] = await ethers.getSigners();
+        const newUserAddr = await newUserSigner.getAddress();
+        const amountOut = toWei('100');
+
+        const startingEthBalance = await newUserSigner.getBalance();
+        const startingBptBalance = await _pools[1].balanceOf(newUserAddr);
+
+        const poolAmountIn = await proxy.connect(newUserSigner).callStatic.exitswapExternAmountOut(
+            _POOLS[1],
+            ETH,
+            amountOut,
+            startingBptBalance,
+            {
+              gasPrice: 0
+            }
+        );
+
+        await proxy.connect(newUserSigner).exitswapExternAmountOut(
+            _POOLS[1],
+            ETH,
+            amountOut,
+            startingBptBalance,
+            {
+              gasPrice: 0
+            }
+        );
+        // 999999998999.999291088
+        // 999999999099.999291088
+
+        const endingEthBalance = await newUserSigner.getBalance();
+        const endingBptBalance = await _pools[1].balanceOf(newUserAddr);
+        console.log(startingEthBalance.toString());
+        console.log(endingEthBalance.toString());
+
+        expect(endingEthBalance).to.equal(startingEthBalance.add(amountOut));
+        expect(endingBptBalance).to.equal(startingBptBalance.sub(poolAmountIn));
     });
 
 });

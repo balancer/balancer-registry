@@ -380,6 +380,11 @@ contract ExchangeProxy is Ownable {
         TokenInterface poolToken = TokenInterface(poolAddress);
         transferFromAll(poolToken, maxPoolAmountIn);
 
+        if (poolToken.allowance(address(this), poolAddress) > 0) {
+            poolToken.approve(poolAddress, 0);
+        }
+        poolToken.approve(poolAddress, maxPoolAmountIn);
+
         PoolInterface pool = PoolInterface(poolAddress);
 
         if (isETH(tokenOut)) {
@@ -391,7 +396,7 @@ contract ExchangeProxy is Ownable {
         // Returns any remaing tokenIn
         transferAll(poolToken, getBalance(poolToken));
         // Send pool token
-        transferAll(tokenOut, getBalance(tokenOut));
+        transferAll(tokenOut, tokenAmountOut);
     }
 
     function viewSplitExactIn(
