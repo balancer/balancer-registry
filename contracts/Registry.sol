@@ -150,7 +150,7 @@ contract BRegistry {
 
                 bytes32 indices = _buildSortIndices(effectiveLiquidity);
 
-                console.logBytes32(indices);
+                // console.logBytes32(indices);
 
                 if (indices != _pools[key].indices) {
                     emit IndicesUpdated(
