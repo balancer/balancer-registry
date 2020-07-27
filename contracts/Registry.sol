@@ -146,9 +146,9 @@ contract BRegistry {
             for (uint j = i + 1; j < tokens.length; j++) {
                 bytes32 key = _createKey(tokens[i], tokens[j]);
                 address[] memory pools = getPoolsWithLimit(tokens[i], tokens[j], 0, Math.min(256, lengthLimit));
-                uint256[] memory invs = _getInvsForPools(tokens[i], tokens[j], pools);
+                uint256[] memory effectiveLiquidity = _getEffectiveLiquidityForPools(tokens[i], tokens[j], pools);
 
-                bytes32 indices = _buildSortIndices(invs);
+                bytes32 indices = _buildSortIndices(effectiveLiquidity);
 
                 console.logBytes32(indices);
 
@@ -176,19 +176,20 @@ contract BRegistry {
         );
     }
 
-    function _getInvsForPools(address token1, address token2, address[] memory pools)
-        internal view returns(uint256[] memory invs)
+    function _getEffectiveLiquidityForPools(address token1, address token2, address[] memory pools)
+        internal view returns(uint256[] memory effectiveLiquidity)
     {
-        invs = new uint256[](pools.length);
+        effectiveLiquidity = new uint256[](pools.length);
         for (uint i = 0; i < pools.length; i++) {
             bytes32 key = _createKey(token1, token2);
             PoolPairInfo memory info = _infos[pools[i]][key];
             if (token1 < token2) {
-                invs[i] = bdiv(uint256(info.weight1), uint256(info.weight2)).add(BONE);
-                invs[i] = bdiv(invs[i], (2 * BONE)).mul(IBPool(pools[i]).getBalance(token2));
+                // we define effective liquidity as b2 * w1 / (w1 + w2)
+                effectiveLiquidity[i] = bdiv(uint256(info.weight1),uint256(info.weight1).add(uint256(info.weight2)));
+                effectiveLiquidity[i] = effectiveLiquidity[i].mul(IBPool(pools[i]).getBalance(token2));
             } else {
-                invs[i] = bdiv(uint256(info.weight2), uint256(info.weight1)).add(BONE);
-                invs[i] = bdiv(invs[i], (2 * BONE)).mul(IBPool(pools[i]).getBalance(token1));
+                effectiveLiquidity[i] = bdiv(uint256(info.weight2),uint256(info.weight1).add(uint256(info.weight2)));
+                effectiveLiquidity[i] = effectiveLiquidity[i].mul(IBPool(pools[i]).getBalance(token1));
             }
         }
     }
@@ -199,26 +200,26 @@ contract BRegistry {
     {
         require(b != 0, "ERR_DIV_ZERO");
         uint c0 = a * BONE;
-        require(a == 0 || c0 / a == BONE, "ERR_DIV_INTERNAL"); // bmul overflow
+        require(a == 0 || c0 / a == BONE, "ERR_DIV_INTERNAL"); // bdiv overflow
         uint c1 = c0 + (b / 2);
         require(c1 >= c0, "ERR_DIV_INTERNAL"); //  badd require
         uint c2 = c1 / b;
         return c2;
     }
 
-    function _buildSortIndices(uint256[] memory invs)
+    function _buildSortIndices(uint256[] memory effectiveLiquidity)
         internal pure returns(bytes32)
     {
         uint256 result = 0;
-        uint256 prevInv = uint256(-1);
-        for (uint i = 0; i < Math.min(invs.length, 32); i++) {
+        uint256 prevEffectiveLiquidity = uint256(-1);
+        for (uint i = 0; i < Math.min(effectiveLiquidity.length, 32); i++) {
             uint256 bestIndex = 0;
-            for (uint j = 0; j < invs.length; j++) {
-                if ((invs[j] > invs[bestIndex] && invs[j] < prevInv) || invs[bestIndex] >= prevInv) {
+            for (uint j = 0; j < effectiveLiquidity.length; j++) {
+                if ((effectiveLiquidity[j] > effectiveLiquidity[bestIndex] && effectiveLiquidity[j] < prevEffectiveLiquidity) || effectiveLiquidity[bestIndex] >= prevEffectiveLiquidity) {
                     bestIndex = j;
                 }
             }
-            prevInv = invs[bestIndex];
+            prevEffectiveLiquidity = effectiveLiquidity[bestIndex];
             result |= (bestIndex + 1) << (248 - i * 8);
         }
         return bytes32(result);

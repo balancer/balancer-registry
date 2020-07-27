@@ -53,7 +53,7 @@ contract ExchangeProxy is Ownable {
         uint    tokenBalanceOut;
         uint    tokenWeightOut;
         uint    swapFee;
-        uint    slippageSlopeEffectivePrice;
+        uint    effectiveLiquidity;
     }
 
     struct Swap {
@@ -345,15 +345,15 @@ contract ExchangeProxy is Ownable {
         address[] memory poolAddresses = registry.getBestPoolsWithLimit(tokenIn, tokenOut, nPools);
 
         Pool[] memory pools = new Pool[](poolAddresses.length);
-        uint sumLiquidity;
+        uint sumEffectiveLiquidity;
         for (uint i = 0; i < poolAddresses.length; i++) {
             pools[i] = getPoolData(tokenIn, tokenOut, poolAddresses[i]);
-            sumLiquidity = sumLiquidity.add(pools[i].slippageSlopeEffectivePrice);
+            sumEffectiveLiquidity = sumEffectiveLiquidity.add(pools[i].effectiveLiquidity);
         }
 
         uint[] memory bestInputAmounts = new uint[](pools.length);
         for (uint i = 0; i < pools.length; i++) {
-            bestInputAmounts[i] = bmul(swapAmount, bdiv(pools[i].slippageSlopeEffectivePrice, sumLiquidity));//swapAmount.mul(pools[i].slippageSlopeEffectivePrice.div(sumLiquidity));
+            bestInputAmounts[i] = bmul(swapAmount, bdiv(pools[i].effectiveLiquidity, sumEffectiveLiquidity));//swapAmount.mul(pools[i].effectiveLiquidity.div(sumEffectiveLiquidity));
         }
         bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
         swaps = new Swap[](pools.length);
@@ -386,15 +386,15 @@ contract ExchangeProxy is Ownable {
         address[] memory poolAddresses = registry.getBestPoolsWithLimit(tokenIn, tokenOut, nPools);
 
         Pool[] memory pools = new Pool[](poolAddresses.length);
-        uint sumLiquidity;
+        uint sumEffectiveLiquidity;
         for (uint i = 0; i < poolAddresses.length; i++) {
             pools[i] = getPoolData(tokenIn, tokenOut, poolAddresses[i]);
-            sumLiquidity = sumLiquidity.add(pools[i].slippageSlopeEffectivePrice);
+            sumEffectiveLiquidity = sumEffectiveLiquidity.add(pools[i].effectiveLiquidity);
         }
 
         uint[] memory bestInputAmounts = new uint[](pools.length);
         for (uint i = 0; i < pools.length; i++) {
-            bestInputAmounts[i] = bmul(swapAmount, bdiv(pools[i].slippageSlopeEffectivePrice, sumLiquidity));//swapAmount.mul(pools[i].slippageSlopeEffectivePrice.div(sumLiquidity));
+            bestInputAmounts[i] = bmul(swapAmount, bdiv(pools[i].effectiveLiquidity, sumEffectiveLiquidity));//swapAmount.mul(pools[i].effectiveLiquidity.div(sumEffectiveLiquidity));
         }
         bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
         swaps = new Swap[](pools.length);
@@ -448,7 +448,7 @@ contract ExchangeProxy is Ownable {
         uint tokenWeightOut = pool.getDenormalizedWeight(tokenOut);
         uint swapFee = pool.getSwapFee();
 
-        uint slippageSlopeEffectivePrice = calcSlippageSlopeEffectivePrice(
+        uint effectiveLiquidity = calcEffectiveLiquidity(
                                             tokenWeightIn,
                                             tokenBalanceOut,
                                             tokenWeightOut
@@ -460,34 +460,34 @@ contract ExchangeProxy is Ownable {
             tokenBalanceOut: tokenBalanceOut,
             tokenWeightOut: tokenWeightOut,
             swapFee: swapFee,
-            slippageSlopeEffectivePrice: slippageSlopeEffectivePrice
+            effectiveLiquidity: effectiveLiquidity
         });
 
         return returnPool;
     }
 
-    function calcSlippageSlopeEffectivePrice(
+    function calcEffectiveLiquidity(
         uint tokenWeightIn,
         uint tokenBalanceOut,
         uint tokenWeightOut
     )
         public pure
-        returns (uint slippageSlopeEffectivePrice)
+        returns (uint effectiveLiquidity)
     {
 
-        // (wo/wi+1)/(2*Bo)
-        slippageSlopeEffectivePrice = bdiv(
+        // Bo * wi/(wi+wo)
+        effectiveLiquidity = bmul(
             bdiv(
-                tokenWeightOut,
-                tokenWeightIn
-            ).add(BONE),
-            bmul(
-                2*BONE,
-                tokenBalanceOut
-            )
+                tokenWeightIn,
+                badd(
+                    tokenWeightOut,
+                    tokenWeightIn
+                )
+            ),
+            tokenBalanceOut
         );
 
-        return slippageSlopeEffectivePrice;
+        return effectiveLiquidity;
     }
 
     function badd(uint a, uint b)
