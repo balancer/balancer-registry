@@ -1,4 +1,5 @@
 import { BuidlerConfig, task, usePlugin } from "@nomiclabs/buidler/config";
+require('dotenv').config();
 
 usePlugin("@nomiclabs/buidler-waffle");
 usePlugin("buidler-gas-reporter");
@@ -29,6 +30,14 @@ const config: BuidlerConfig = {
         { privateKey: '0x56d6ec847fd896d97961ec83ac0fddb9f40ad0f72f77704f2d14051a9ae81aa0', balance: '1000000000000000000000000000000' }
       ]
     },
+    kovan: {
+      url: `https://kovan.infura.io/v3/${process.env.INFURA}`,
+      accounts: [`${process.env.KEYKOVAN}`]
+    },
+    main: {
+      url: `https://mainnet.infura.io/v3/${process.env.INFURA}`,
+      accounts: [`${process.env.KEYMAIN}`]
+    }
   },
 };
 
