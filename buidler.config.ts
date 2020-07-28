@@ -32,11 +32,13 @@ const config: BuidlerConfig = {
     },
     kovan: {
       url: `https://kovan.infura.io/v3/${process.env.INFURA}`,
-      accounts: [`${process.env.KEYKOVAN}`]
+      accounts: [`${process.env.KEYKOVAN}`],
+      gasPrice: 70000000000
     },
     main: {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA}`,
-      accounts: [`${process.env.KEYMAIN}`]
+      accounts: [`${process.env.KEYMAIN}`],
+      gasPrice: 55000000000
     }
   },
 };
