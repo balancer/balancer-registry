@@ -24,7 +24,11 @@
     "typescript": "^3.9.6"
   },
   "dependencies": {
+    "@balancer-labs/sor": "0.4.0-3",
+    "@ethersproject/providers": "^5.0.5",
     "@openzeppelin/contracts": "2.5.1",
-    "dotenv": "^8.2.0"
+    "@types/isomorphic-fetch": "^0.0.35",
+    "dotenv": "^8.2.0",
+    "isomorphic-fetch": "^2.2.1"
   }
 }
