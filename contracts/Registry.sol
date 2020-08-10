@@ -25,6 +25,7 @@ contract BRegistry {
         uint80 weight1;
         uint80 weight2;
         uint80 swapFee;
+        uint256 liq;
     }
 
     struct SortedPools {
@@ -114,13 +115,15 @@ contract BRegistry {
             _infos[pool][key] = PoolPairInfo({
                 weight1: uint80(IBPool(pool).getDenormalizedWeight(token1)),
                 weight2: uint80(IBPool(pool).getDenormalizedWeight(token2)),
-                swapFee: uint80(swapFee)
+                swapFee: uint80(swapFee),
+                liq: uint256(0)
             });
         } else {
             _infos[pool][key] = PoolPairInfo({
                 weight1: uint80(IBPool(pool).getDenormalizedWeight(token2)),
                 weight2: uint80(IBPool(pool).getDenormalizedWeight(token1)),
-                swapFee: uint80(swapFee)
+                swapFee: uint80(swapFee),
+                liq: uint256(0)
             });
         }
 
@@ -151,6 +154,27 @@ contract BRegistry {
                 bytes32 indices = _buildSortIndices(effectiveLiquidity);
 
                 // console.logBytes32(indices);
+
+                if (indices != _pools[key].indices) {
+                    emit IndicesUpdated(
+                        tokens[i] < tokens[j] ? tokens[i] : tokens[j],
+                        tokens[i] < tokens[j] ? tokens[j] : tokens[i],
+                        _pools[key].indices,
+                        indices
+                    );
+                    _pools[key].indices = indices;
+                }
+            }
+        }
+    }
+
+    function sortPoolsWithPurge(address[] calldata tokens, uint256 lengthLimit) external {
+        for (uint i = 0; i < tokens.length; i++) {
+            for (uint j = i + 1; j < tokens.length; j++) {
+                bytes32 key = _createKey(tokens[i], tokens[j]);
+                address[] memory pools = getPoolsWithLimit(tokens[i], tokens[j], 0, Math.min(256, lengthLimit));
+                uint256[] memory effectiveLiquidity = _getEffectiveLiquidityForPoolsPurge(tokens[i], tokens[j], pools);
+                bytes32 indices = _buildSortIndices(effectiveLiquidity);
 
                 if (indices != _pools[key].indices) {
                     emit IndicesUpdated(
@@ -196,6 +220,52 @@ contract BRegistry {
         }
     }
 
+    // Calculates total liquidity for all existing token pair pools
+    // Removes any that are below threshold
+    function _getEffectiveLiquidityForPoolsPurge(address token1, address token2, address[] memory pools)
+        public returns(uint256[] memory effectiveLiquidity)
+    {
+        uint256 totalLiq = 0;
+        uint256[] memory tempLiquidity = new uint256[](pools.length);
+        bytes32 key = _createKey(token1, token2);
+
+        // Store each pools liquidity and sum total liquidity
+        for (uint i = 0; i < pools.length; i++) {
+            PoolPairInfo memory info = _infos[pools[i]][key];
+            if (token1 < token2) {
+                // we define effective liquidity as b2 * w1 / (w1 + w2)
+                _infos[pools[i]][key].liq = bdiv(uint256(info.weight1), uint256(info.weight1).add(uint256(info.weight2)));
+                _infos[pools[i]][key].liq = _infos[pools[i]][key].liq.mul(IBPool(pools[i]).getBalance(token2));
+                totalLiq = totalLiq.add(_infos[pools[i]][key].liq);
+                // console.log("1. %s: %s", pools[i], _infos[pools[i]][key].liq);
+            } else {
+                _infos[pools[i]][key].liq = bdiv(uint256(info.weight2), uint256(info.weight1).add(uint256(info.weight2)));
+                _infos[pools[i]][key].liq = _infos[pools[i]][key].liq.mul(IBPool(pools[i]).getBalance(token2));
+                totalLiq = totalLiq.add(_infos[pools[i]][key].liq);
+                // console.log("2. %s: %s", pools[i], _infos[pools[i]][key].liq);
+            }
+        }
+
+        uint256 threshold = bmul(totalLiq, ((10 * BONE) / 100));
+        // console.log("totalLiq: %s, Thresh: %s", totalLiq, threshold);
+
+        // Delete any pools that aren't greater than threshold (10% of total)
+        for(uint i = 0;i < _pools[key].pools.length();i++){
+            //console.log("Pool: %s, %s", _pools[key].pools.values[i], info.liq);
+            if(_infos[_pools[key].pools.values[i]][key].liq < threshold){
+                _pools[key].pools.remove(_pools[key].pools.values[i]);
+            }
+        }
+
+        effectiveLiquidity = new uint256[](_pools[key].pools.length());
+
+        // pool.remove reorders pools so need to use correct liq for index
+        for(uint i = 0;i < _pools[key].pools.length();i++){
+            // console.log(_pools[key].pools.values[i]);
+            effectiveLiquidity[i] = _infos[_pools[key].pools.values[i]][key].liq;
+        }
+    }
+
     function bdiv(uint a, uint b)
         internal pure
         returns (uint)
@@ -206,6 +276,18 @@ contract BRegistry {
         uint c1 = c0 + (b / 2);
         require(c1 >= c0, "ERR_DIV_INTERNAL"); //  badd require
         uint c2 = c1 / b;
+        return c2;
+    }
+
+    function bmul(uint a, uint b)
+        internal pure
+        returns (uint)
+    {
+        uint c0 = a * b;
+        require(a == 0 || c0 / a == b, "ERR_MUL_OVERFLOW");
+        uint c1 = c0 + (BONE / 2);
+        require(c1 >= c0, "ERR_MUL_OVERFLOW");
+        uint c2 = c1 / BONE;
         return c2;
     }
 

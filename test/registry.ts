@@ -133,7 +133,7 @@ describe("Registry", function() {
         await pool7.setSwapFee(toWei('0.0001'));
         await pool7.finalize();
         // Liq 100/10
-
+        /*
         console.log('Set up complete: ')
         console.log(`Pool1: ${POOL1}`);
         console.log(`Pool2: ${POOL2}`);
@@ -142,6 +142,7 @@ describe("Registry", function() {
         console.log(`Pool5: ${POOL5}`);
         console.log(`Pool6: ${POOL6}`);
         console.log(`Pool7: ${POOL7}`);
+        */
     });
 
     it("No Added Pools, gets Should Return 0", async function() {
@@ -351,5 +352,61 @@ describe("Registry", function() {
         expect(pools[2]).to.equal(POOL5);
         expect(pools[3]).to.equal(POOL6);
         expect(pools[4]).to.equal(POOL7);
+    });
+
+    it("Sort Pools With Purge Should Remove <10% Pool.", async function() {
+        let tx = await registry.addPoolPair(POOL7, WETH, BAL);
+        tx = await tx.wait();
+        tx = await registry.addPoolPair(POOL4, WETH, BAL);
+        tx = await tx.wait();
+        tx = await registry.addPoolPair(POOL3, WETH, BAL);
+        tx = await tx.wait();
+        tx = await registry.addPoolPair(POOL6, BAL, WETH);
+        tx = await tx.wait();
+        tx = await registry.addPoolPair(POOL5, BAL, WETH);
+        tx = await tx.wait();
+
+        tx = await registry.sortPoolsWithPurge([WETH, BAL], 10);
+        tx = await tx.wait();
+        console.log(`Sort Pools With Purge: ${tx.gasUsed.toString()}`);
+
+        let pools = await registry.getBestPoolsWithLimit(WETH, BAL, 5);
+        expect(pools.length).to.equal(4);
+        expect(pools[0]).to.equal(POOL3);
+        expect(pools[1]).to.equal(POOL4);
+        expect(pools[2]).to.equal(POOL5);
+        expect(pools[3]).to.equal(POOL6);
+    });
+
+    it("Sort Pools With Purge Should Remove <10% Pool.", async function() {
+        let tx = await registry.addPoolPair(POOL7, WETH, BAL);
+        tx = await tx.wait();
+        tx = await registry.addPoolPair(POOL4, WETH, BAL);
+        tx = await tx.wait();
+        tx = await registry.addPoolPair(POOL3, WETH, BAL);
+        tx = await tx.wait();
+        tx = await registry.addPoolPair(POOL5, BAL, WETH);
+        tx = await tx.wait();
+
+        tx = await registry.sortPoolsWithPurge([WETH, BAL], 10);
+        tx = await tx.wait();
+        console.log(`Sort Pools With Purge: ${tx.gasUsed.toString()}`);
+
+        let pools = await registry.getBestPoolsWithLimit(WETH, BAL, 5);
+        expect(pools.length).to.equal(3);
+        expect(pools[0]).to.equal(POOL3);
+        expect(pools[1]).to.equal(POOL4);
+        expect(pools[2]).to.equal(POOL5);
+
+        tx = await registry.addPoolPair(POOL6, BAL, WETH);
+        tx = await tx.wait();
+        tx = await registry.sortPoolsWithPurge([WETH, BAL], 10);
+        tx = await tx.wait();
+        pools = await registry.getBestPoolsWithLimit(WETH, BAL, 5);
+        expect(pools.length).to.equal(4);
+        expect(pools[0]).to.equal(POOL3);
+        expect(pools[1]).to.equal(POOL4);
+        expect(pools[2]).to.equal(POOL5);
+        expect(pools[3]).to.equal(POOL6);
     });
 });
