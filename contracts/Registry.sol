@@ -187,9 +187,11 @@ contract BRegistry {
                 // we define effective liquidity as b2 * w1 / (w1 + w2)
                 effectiveLiquidity[i] = bdiv(uint256(info.weight1),uint256(info.weight1).add(uint256(info.weight2)));
                 effectiveLiquidity[i] = effectiveLiquidity[i].mul(IBPool(pools[i]).getBalance(token2));
+                // console.log("1. %s: %s", pools[i], effectiveLiquidity[i]);
             } else {
                 effectiveLiquidity[i] = bdiv(uint256(info.weight2),uint256(info.weight1).add(uint256(info.weight2)));
-                effectiveLiquidity[i] = effectiveLiquidity[i].mul(IBPool(pools[i]).getBalance(token1));
+                effectiveLiquidity[i] = effectiveLiquidity[i].mul(IBPool(pools[i]).getBalance(token2));
+                // console.log("2. %s: %s", pools[i], effectiveLiquidity[i]);
             }
         }
     }
