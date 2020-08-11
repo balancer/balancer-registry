@@ -18,6 +18,8 @@ import "@nomiclabs/buidler/console.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/ownership/Ownable.sol";
 
+import "./EIP712MetaTransaction.sol";
+
 interface PoolInterface {
     function swapExactAmountIn(address, uint, address, uint, uint) external returns (uint, uint);
     function swapExactAmountOut(address, uint, address, uint, uint) external returns (uint, uint);
@@ -42,7 +44,7 @@ interface RegistryInterface {
     function getBestPoolsWithLimit(address, address, uint) external view returns (address[] memory);
 }
 
-contract ExchangeProxy is Ownable {
+contract ExchangeProxy is Ownable, EIP712MetaTransaction("ExchangeProxy", "1") {
 
     using SafeMath for uint256;
 
@@ -88,6 +90,7 @@ contract ExchangeProxy is Ownable {
         public payable
         returns (uint totalAmountOut)
     {
+        console.log("%s", msgSender());
         transferFromAll(tokenIn, totalAmountIn);
 
         for (uint i = 0; i < swaps.length; i++) {
@@ -114,6 +117,8 @@ contract ExchangeProxy is Ownable {
 
         transferAll(tokenOut, totalAmountOut);
         transferAll(tokenIn, getBalance(tokenIn));
+        
+        return 0;
     }
 
     function batchSwapExactOut(
@@ -549,7 +554,7 @@ contract ExchangeProxy is Ownable {
         if (isETH(token)) {
             weth.deposit.value(msg.value)();
         } else {
-            require(token.transferFrom(msg.sender, address(this), amount), "ERR_TRANSFER_FAILED");
+            require(token.transferFrom(msgSender(), address(this), amount), "ERR_TRANSFER_FAILED");
         }
     }
 
@@ -568,10 +573,10 @@ contract ExchangeProxy is Ownable {
 
         if (isETH(token)) {
             weth.withdraw(amount);
-            (bool xfer,) = msg.sender.call.value(amount)("");
+            (bool xfer,) = msgSender().call.value(amount)("");
             require(xfer, "ERR_ETH_FAILED");
         } else {
-            require(token.transfer(msg.sender, amount), "ERR_TRANSFER_FAILED");
+            require(token.transfer(msgSender(), amount), "ERR_TRANSFER_FAILED");
         }
     }
 

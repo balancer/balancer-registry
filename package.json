@@ -29,6 +29,8 @@
     "@openzeppelin/contracts": "2.5.1",
     "@types/isomorphic-fetch": "^0.0.35",
     "dotenv": "^8.2.0",
+    "ethereumjs-abi": "^0.6.8",
+    "ethereumjs-util": "6.2.0",
     "isomorphic-fetch": "^2.2.1"
   }
 }
