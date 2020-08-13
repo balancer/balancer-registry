@@ -28,9 +28,11 @@
     "@ethersproject/providers": "^5.0.5",
     "@openzeppelin/contracts": "2.5.1",
     "@types/isomorphic-fetch": "^0.0.35",
+    "axios": "^0.19.2",
     "dotenv": "^8.2.0",
     "ethereumjs-abi": "^0.6.8",
     "ethereumjs-util": "6.2.0",
-    "isomorphic-fetch": "^2.2.1"
+    "isomorphic-fetch": "^2.2.1",
+    "moment": "^2.27.0"
   }
 }
