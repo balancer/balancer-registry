@@ -226,7 +226,6 @@ contract BRegistry {
         public returns(uint256[] memory effectiveLiquidity)
     {
         uint256 totalLiq = 0;
-        uint256[] memory tempLiquidity = new uint256[](pools.length);
         bytes32 key = _createKey(token1, token2);
 
         // Store each pools liquidity and sum total liquidity

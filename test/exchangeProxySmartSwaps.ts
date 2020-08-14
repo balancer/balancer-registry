@@ -215,6 +215,8 @@ describe('ExchangeProxy Smart Swaps', function(){
             totalCheck = totalCheck.plus(Decimal(swap.swapAmount.toString()));
         })
 
+        console.log(`totalCheck ${totalCheck}`)
+
         assert(Decimal(totalAmountIn.toString()).eq(totalCheck));
 
         const totalAmountOut = await proxy.callStatic.smartSwapExactIn(
@@ -275,6 +277,7 @@ describe('ExchangeProxy Smart Swaps', function(){
             // console.log(swap.tokenOutParam.toString())
             totalCheck = totalCheck.plus(Decimal(swap.swapAmount.toString()));
         })
+        console.log(`totalCheck ${totalCheck}`)
         assert(Decimal(totalAmountOut.toString()).eq(totalCheck));
 
         const totalIn = await proxy.callStatic.smartSwapExactOut(

@@ -14,7 +14,6 @@
 pragma solidity 0.5.12;
 pragma experimental ABIEncoderV2;
 
-import "@nomiclabs/buidler/console.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/ownership/Ownable.sol";
 
@@ -353,7 +352,7 @@ contract ExchangeProxy is Ownable {
 
         uint[] memory bestInputAmounts = new uint[](pools.length);
         for (uint i = 0; i < pools.length; i++) {
-            bestInputAmounts[i] = bmul(swapAmount, bdiv(pools[i].effectiveLiquidity, sumEffectiveLiquidity));//swapAmount.mul(pools[i].effectiveLiquidity.div(sumEffectiveLiquidity));
+            bestInputAmounts[i] = swapAmount.mul(pools[i].effectiveLiquidity).div(sumEffectiveLiquidity);
         }
         bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
         swaps = new Swap[](pools.length);
@@ -394,7 +393,7 @@ contract ExchangeProxy is Ownable {
 
         uint[] memory bestInputAmounts = new uint[](pools.length);
         for (uint i = 0; i < pools.length; i++) {
-            bestInputAmounts[i] = bmul(swapAmount, bdiv(pools[i].effectiveLiquidity, sumEffectiveLiquidity));//swapAmount.mul(pools[i].effectiveLiquidity.div(sumEffectiveLiquidity));
+            bestInputAmounts[i] = swapAmount.mul(pools[i].effectiveLiquidity).div(sumEffectiveLiquidity);
         }
         bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
         swaps = new Swap[](pools.length);
@@ -426,9 +425,9 @@ contract ExchangeProxy is Ownable {
 
         // Add dust to the first swapAmount (which is always the greater) if rounding error is negative
         if (sumBestInputAmounts < swapAmount) {
-            bestInputAmounts[0] = badd(bestInputAmounts[0], bsub(swapAmount, sumBestInputAmounts));
+            bestInputAmounts[0] = bestInputAmounts[0].add(swapAmount.sub(sumBestInputAmounts));
         } else {
-            bestInputAmounts[0] = bsub(bestInputAmounts[0], bsub(sumBestInputAmounts, swapAmount));
+            bestInputAmounts[0] = bestInputAmounts[0].sub(sumBestInputAmounts.sub(swapAmount));
         }
         return bestInputAmounts;
     }
@@ -476,27 +475,12 @@ contract ExchangeProxy is Ownable {
     {
 
         // Bo * wi/(wi+wo)
-        effectiveLiquidity = bmul(
-            bdiv(
-                tokenWeightIn,
-                badd(
-                    tokenWeightOut,
-                    tokenWeightIn
-                )
-            ),
-            tokenBalanceOut
-        );
+        effectiveLiquidity = 
+            tokenWeightIn.mul(BONE).div(
+                tokenWeightOut.add(tokenWeightIn)
+            ).mul(tokenBalanceOut).div(BONE);
 
         return effectiveLiquidity;
-    }
-
-    function badd(uint a, uint b)
-        internal pure
-        returns (uint)
-    {
-        uint c = a + b;
-        require(c >= a, "ERR_ADD_OVERFLOW");
-        return c;
     }
 
     function calcTotalOutExactIn(
@@ -540,7 +524,7 @@ contract ExchangeProxy is Ownable {
                                 bestPools[i].swapFee
                             );
 
-            totalOutput = badd(totalOutput, output);
+            totalOutput = totalOutput.add(output);
         }
         return totalOutput;
     }
@@ -579,42 +563,6 @@ contract ExchangeProxy is Ownable {
         return (address(token) == ETH_ADDRESS);
     }
 
-    function bmul(uint a, uint b)
-        internal pure
-        returns (uint)
-    {
-        uint c0 = a * b;
-        require(a == 0 || c0 / a == b, "ERR_MUL_OVERFLOW");
-        uint c1 = c0 + (BONE / 2);
-        require(c1 >= c0, "ERR_MUL_OVERFLOW");
-        uint c2 = c1 / BONE;
-        return c2;
-    }
-
-    function bdiv(uint a, uint b)
-        internal pure
-        returns (uint)
-    {
-        require(b != 0, "ERR_DIV_ZERO");
-        uint c0 = a * BONE;
-        require(a == 0 || c0 / a == BONE, "ERR_DIV_INTERNAL"); // bmul overflow
-        uint c1 = c0 + (b / 2);
-        require(c1 >= c0, "ERR_DIV_INTERNAL"); //  badd require
-        uint c2 = c1 / b;
-        return c2;
-    }
-
-    function bsubSign(uint a, uint b)
-        internal pure
-        returns (uint, bool)
-    {
-        if (a >= b) {
-            return (a - b, false);
-        } else {
-            return (b - a, true);
-        }
-    }
-
     function sum(uint[] memory _data)
       internal pure
       returns (uint total)
@@ -624,15 +572,6 @@ contract ExchangeProxy is Ownable {
                 total := add(total, mload(add(add(_data, 0x20), mul(i, 0x20))))
             }
         }
-    }
-
-    function bsub(uint a, uint b)
-        internal pure
-        returns (uint)
-    {
-        (uint c, bool flag) = bsubSign(a, b);
-        require(!flag, "ERR_SUB_UNDERFLOW");
-        return c;
     }
 
     function() external payable {}
