@@ -1,8 +1,7 @@
-import { assert } from 'chai';
+import { assert, expect } from 'chai';
 import { ethers, ethereum } from "@nomiclabs/buidler";
 import { Signer, utils } from "ethers";
 const verbose = process.env.VERBOSE;
-const Decimal = require('decimal.js');
 const { calcRelativeDiff } = require('./lib/calc_comparisons');
 const errorDelta = 10 ** -8;
 
@@ -136,20 +135,15 @@ describe('ExchangeProxy Smart Swaps', function(){
         assert.equal(swaps[2].swapAmount.toString(), "2101757242093019490000");
         assert.equal(swaps[3].swapAmount.toString(), "1588705449315229800000");
         */
-
-        let totalCheck = Decimal(0);
+        let totalCheck = ethers.BigNumber.from(0);
         swaps.forEach((swap: any) => {
-            totalCheck = totalCheck.plus(Decimal(swap.swapAmount.toString()));
+            let amt = ethers.BigNumber.from(swap.swapAmount.toString());
+            totalCheck = totalCheck.add(amt);
         })
 
-        const relDif = calcRelativeDiff(Decimal(totalAmountIn.toString()), totalCheck);
-        if (verbose) {
-            console.log(`expected: ${totalAmountIn.toString()})`);
-            console.log(`actual  : ${totalCheck.toString()})`);
-            console.log(`relDif  : ${relDif})`);
-        }
-
-        assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
+        console.log(`totalCheck ${totalCheck}`);
+        console.log(`totalCheck ${totalAmountIn.toString()}`);
+        expect(totalCheck).to.equal(totalAmountIn);
 
         const totalAmountOut = await proxy.callStatic.smartSwapExactIn(
             MKR, WETH, totalAmountIn, 0, numberPools
@@ -171,20 +165,15 @@ describe('ExchangeProxy Smart Swaps', function(){
         assert.equal(swaps[3].swapAmount.toString(), "1573165482744734360");
         assert.equal(totalOutput.toString(), "98405266835517850927");
         */
-
-        let totalCheck = Decimal(0);
+        let totalCheck = ethers.BigNumber.from(0);
         swaps.forEach((swap: any) => {
-            totalCheck = totalCheck.plus(Decimal(swap.swapAmount.toString()));
+            let amt = ethers.BigNumber.from(swap.swapAmount.toString());
+            totalCheck = totalCheck.add(amt);
         })
 
-        const relDif = calcRelativeDiff(Decimal(totalAmountIn.toString()), totalCheck);
-        if (verbose) {
-            console.log(`expected: ${totalAmountIn.toString()})`);
-            console.log(`actual  : ${totalCheck.toString()})`);
-            console.log(`relDif  : ${relDif})`);
-        }
-
-        assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
+        console.log(`totalCheck ${totalCheck}`);
+        console.log(`totalCheck ${totalAmountIn.toString()}`);
+        expect(totalCheck).to.equal(totalAmountIn);
 
         const totalAmountOut = await proxy.callStatic.smartSwapExactIn(
             ETH, MKR, totalAmountIn, 0, numberPools,
@@ -209,15 +198,15 @@ describe('ExchangeProxy Smart Swaps', function(){
         assert.equal(result.swaps[3].tokenInParam.toString(), "10237963637071368983");
         assert.equal(result.totalOutput.toString(), "7679415326946795121");
         */
-
-        let totalCheck = Decimal(0);
+        let totalCheck = ethers.BigNumber.from(0);
         swaps.forEach((swap: any) => {
-            totalCheck = totalCheck.plus(Decimal(swap.swapAmount.toString()));
+            let amt = ethers.BigNumber.from(swap.swapAmount.toString());
+            totalCheck = totalCheck.add(amt);
         })
 
-        console.log(`totalCheck ${totalCheck}`)
-
-        assert(Decimal(totalAmountIn.toString()).eq(totalCheck));
+        console.log(`totalCheck ${totalCheck}`);
+        console.log(`totalCheck ${totalAmountIn.toString()}`);
+        expect(totalCheck).to.equal(totalAmountIn);
 
         const totalAmountOut = await proxy.callStatic.smartSwapExactIn(
             MKR, ETH, totalAmountIn, 0, numberPools
@@ -242,11 +231,15 @@ describe('ExchangeProxy Smart Swaps', function(){
         assert.equal(result.swaps[3].tokenOutParam.toString(), "1316441254606065190000");
         assert.equal(result.totalOutput.toString(), "104289193841332281129540");
         */
-        let totalCheck = Decimal(0);
+        let totalCheck = ethers.BigNumber.from(0);
         swaps.forEach((swap: any) => {
-            totalCheck = totalCheck.plus(Decimal(swap.swapAmount.toString()));
+            let amt = ethers.BigNumber.from(swap.swapAmount.toString());
+            totalCheck = totalCheck.add(amt);
         })
-        assert(Decimal(totalAmountOut.toString()).eq(totalCheck));
+
+        console.log(`totalCheck ${totalCheck}`);
+        console.log(`totalCheck ${totalAmountOut.toString()}`);
+        expect(totalCheck).to.equal(totalAmountOut);
 
         const totalIn = await proxy.callStatic.smartSwapExactOut(
             MKR, WETH, totalAmountOut, totalInput, numberPools
@@ -271,14 +264,15 @@ describe('ExchangeProxy Smart Swaps', function(){
         assert.equal(result.swaps[3].tokenOutParam.toString(), "46320939695242975128");
         assert.equal(result.totalOutput.toString(), "35687772808297263273");
         */
-
-        let totalCheck = Decimal(0);
-        swaps.forEach((swap: any) => {
-            // console.log(swap.tokenOutParam.toString())
-            totalCheck = totalCheck.plus(Decimal(swap.swapAmount.toString()));
+        let totalCheck = ethers.BigNumber.from(0);
+        swaps.forEach((swap: any, i: number) => {
+            let amt = ethers.BigNumber.from(swap.swapAmount.toString());
+            totalCheck = totalCheck.add(amt);
         })
-        console.log(`totalCheck ${totalCheck}`)
-        assert(Decimal(totalAmountOut.toString()).eq(totalCheck));
+
+        console.log(`totalCheck ${totalCheck}`);
+        console.log(`totalCheck ${totalAmountOut.toString()}`);
+        expect(totalCheck).to.equal(totalAmountOut);
 
         const totalIn = await proxy.callStatic.smartSwapExactOut(
             ETH, MKR, totalAmountOut, totalInput, numberPools,
@@ -306,13 +300,15 @@ describe('ExchangeProxy Smart Swaps', function(){
         assert.equal(result.swaps[3].tokenOutParam.toString(), "76880169268994207096");
         assert.equal(result.totalOutput.toString(), "5924319155850574968070");
         */
-        let totalCheck = Decimal(0);
+        let totalCheck = ethers.BigNumber.from(0);
         swaps.forEach((swap: any) => {
-            // console.log(swap.tokenOutParam.toString())
-            totalCheck = totalCheck.plus(Decimal(swap.swapAmount.toString()));
+            let amt = ethers.BigNumber.from(swap.swapAmount.toString());
+            totalCheck = totalCheck.add(amt);
         })
 
-        assert(Decimal(totalAmountOut.toString()).eq(totalCheck));
+        console.log(`totalCheck ${totalCheck}`);
+        console.log(`totalCheck ${totalAmountOut.toString()}`);
+        expect(totalCheck).to.equal(totalAmountOut);
 
         const totalIn = await proxy.callStatic.smartSwapExactOut(
             MKR, ETH, totalAmountOut, totalInput, numberPools
