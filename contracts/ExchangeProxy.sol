@@ -117,8 +117,6 @@ contract ExchangeProxy is Ownable, EIP712MetaTransaction("ExchangeProxy", "1") {
 
         transferAll(tokenOut, totalAmountOut);
         transferAll(tokenIn, getBalance(tokenIn));
-        
-        return 0;
     }
 
     function batchSwapExactOut(

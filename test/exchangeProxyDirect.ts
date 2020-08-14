@@ -37,7 +37,6 @@ describe('ExchangeProxy SmartSwaps', async () => {
             admin = await adminSigner.getAddress();
             nonAdmin = await nonAdminSigner.getAddress();
             const ExchangeProxy = await ethers.getContractFactory("ExchangeProxy");
-            const SOR = await ethers.getContractFactory("SmartOrderRouter");
             const BFactory = await ethers.getContractFactory('BFactory');
             const BPool = await ethers.getContractFactory('BPool');
             const Weth9 = await ethers.getContractFactory('WETH9');
