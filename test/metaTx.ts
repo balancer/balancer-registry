@@ -97,17 +97,21 @@ describe('ExchangeProxy metaTx', async () => {
         let DAI: string;
         let MKR: string;
         let ETH: string;
-        let adminSigner: any;
-        let nonAdminSigner: any;
-        let nonAdminPk: any;
-        let admin: string;
-        let nonAdmin: string;
+        let relayerSigner: any;
+        let userSigner: any;
+        let balancerSigner: any;
+        let userPk: any;
+        let relayer: string;
+        let user: string;
+        let balancer: string;
+        let gasPrice = 30000000000;
 
         before(async () => {
-            [adminSigner, nonAdminSigner] = await ethers.getSigners();
-            admin = await adminSigner.getAddress();
-            nonAdmin = await nonAdminSigner.getAddress();
-            nonAdminPk = '0x56d6ec847fd896d97961ec83ac0fddb9f40ad0f72f77704f2d14051a9ae81aa0';
+            [relayerSigner, userSigner, balancerSigner] = await ethers.getSigners();
+            relayer = await relayerSigner.getAddress();
+            user = await userSigner.getAddress();
+            balancer = await balancerSigner.getAddress();
+            userPk = '0x56d6ec847fd896d97961ec83ac0fddb9f40ad0f72f77704f2d14051a9ae81aa0';
 
             const ExchangeProxy = await ethers.getContractFactory("ExchangeProxy");
             const SOR = await ethers.getContractFactory("SmartOrderRouter");
@@ -131,12 +135,12 @@ describe('ExchangeProxy metaTx', async () => {
             PROXY = proxy.address;
 
             await weth.deposit({ value: toWei('25') });
-            await dai.mint(admin, toWei('10000'));
-            await mkr.mint(admin, toWei('20'));
+            await dai.mint(relayer, toWei('10000'));
+            await mkr.mint(relayer, toWei('20'));
 
-            await weth.connect(nonAdminSigner).deposit({ from: nonAdmin, value: toWei('25') });
-            // await dai.mint(nonAdmin, toWei('10000'));
-            await mkr.mint(nonAdmin, toWei('20'));
+            await weth.connect(userSigner).deposit({ from: user, value: toWei('25') });
+            // await dai.mint(user, toWei('10000'));
+            await mkr.mint(user, toWei('20'));
 
             factory = await BFactory.deploy();
 
@@ -152,9 +156,9 @@ describe('ExchangeProxy metaTx', async () => {
             await factory.newBPool();
             pool3 = await ethers.getContractAt("BPool", POOL3);
 
-            await weth.connect(nonAdminSigner).approve(PROXY, MAX, { from: nonAdmin });
-            await dai.connect(nonAdminSigner).approve(PROXY, MAX, { from: nonAdmin });
-            await mkr.connect(nonAdminSigner).approve(PROXY, MAX, { from: nonAdmin });
+            await weth.connect(userSigner).approve(PROXY, MAX, { from: user });
+            await dai.connect(userSigner).approve(PROXY, MAX, { from: user });
+            await mkr.connect(userSigner).approve(PROXY, MAX, { from: user });
 
             await weth.approve(POOL1, MAX);
             await dai.approve(POOL1, MAX);
@@ -238,11 +242,11 @@ describe('ExchangeProxy metaTx', async () => {
 
           // https://github.com/ethers-io/ethers.js/issues/211
           const funcSig = iface.encodeFunctionData("batchSwapExactIn", [swaps, WETH, DAI, totalAmountIn, 0])
-          const nonce = await proxy.getNonce(nonAdmin);
+          const nonce = await proxy.getNonce(user);
 
           const message = {
               nonce: parseInt(nonce),
-              from: nonAdmin,
+              from: user,
               functionSignature: funcSig
           }
 
@@ -254,30 +258,37 @@ describe('ExchangeProxy metaTx', async () => {
                 ]),
             );
 
-          const sig = ethUtil.ecsign(hash, ethUtil.toBuffer(nonAdminPk));
+          const sig = ethUtil.ecsign(hash, ethUtil.toBuffer(userPk));
 
-          // Admin calls this on-behalf of nonAdmin
-          let nonAdminSignerBalBefore = await nonAdminSigner.getBalance();
-          let adminSignerBalBefore = await adminSigner.getBalance();
-          let nonAdminDaiBalBefore = await dai.balanceOf(nonAdmin);
-          expect(nonAdminDaiBalBefore).to.equal(0);
+          // Admin calls this on-behalf of user
+          let userSignerBalBefore = await userSigner.getBalance();
+          let relayerSignerBalBefore = await relayerSigner.getBalance();
+          let userDaiBalBefore = await dai.balanceOf(user);
+          let userWethBalBefore = await weth.balanceOf(user);
+          expect(userDaiBalBefore).to.equal(0);
 
-          const test = await proxy.executeMetaTransaction(
-              nonAdmin,
+          let tx = await proxy.connect(relayerSigner).executeMetaTransaction(
+              user,
               funcSig,
               ethUtil.bufferToHex(sig.r),
               ethUtil.bufferToHex(sig.s),
-              sig.v);
+              sig.v,
+            {
+              gasPrice: gasPrice // 30Gwei
+            });
 
-          let nonAdminSignerBalAfter = await nonAdminSigner.getBalance();
-          let adminSignerBalAfter = await adminSigner.getBalance();
+          tx = await tx.wait();
+
+          let userSignerBalAfter = await userSigner.getBalance();
+          let relayerSignerBalAfter = await relayerSigner.getBalance();
           /*
-          console.log(nonAdminSignerBalBefore.toString());
-          console.log(nonAdminSignerBalAfter.toString());
-          console.log(adminSignerBalBefore.toString());
-          console.log(adminSignerBalAfter.toString());
+          console.log(userSignerBalBefore.toString());
+          console.log(userSignerBalAfter.toString());
+          console.log(relayerSignerBalBefore.toString());
+          console.log(relayerSignerBalAfter.toString());
           */
-          expect(nonAdminSignerBalBefore).to.equal(nonAdminSignerBalAfter);
+          expect(userSignerBalBefore).to.equal(userSignerBalAfter);
+          expect(relayerSignerBalBefore).to.equal(relayerSignerBalAfter.add(tx.gasUsed.mul(gasPrice)));
 
           const swapFee = fromWei(await pool1.getSwapFee());
           const pool1Out = calcOutGivenIn(6, 5, 1200, 5, 0.5, swapFee);
@@ -285,16 +296,17 @@ describe('ExchangeProxy metaTx', async () => {
           const pool3Out = calcOutGivenIn(15, 5, 2500, 5, 1, swapFee);
 
           const expectedTotalOut = pool1Out.plus(pool2Out).plus(pool3Out);
-          let nonAdminDaiBalAfter = await dai.balanceOf(nonAdmin);
-          console.log(nonAdminDaiBalAfter.toString());
+          let userDaiBalAfter = await dai.balanceOf(user);
+          let userWethBalAfter = await weth.balanceOf(user);
+          console.log(userDaiBalAfter.toString());
           console.log(expectedTotalOut.toString())
 
-          const relDif = calcRelativeDiff(expectedTotalOut, Decimal(fromWei(nonAdminDaiBalAfter)));
+          const relDif = calcRelativeDiff(expectedTotalOut, Decimal(fromWei(userDaiBalAfter)));
 
           if (verbose) {
               console.log('batchSwapExactIn');
               console.log(`expected: ${expectedTotalOut})`);
-              console.log(`actual  : ${fromWei(nonAdminDaiBalAfter)})`);
+              console.log(`actual  : ${fromWei(userDaiBalAfter)})`);
               console.log(`relDif  : ${relDif})`);
           }
 
@@ -331,9 +343,9 @@ describe('ExchangeProxy metaTx', async () => {
             const swapFee = fromWei(await pool1.getSwapFee());
             const totalAmountIn = toWei('2');
 
-            const totalAmountOut = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactIn(
+            const totalAmountOut = await proxy.connect(userSigner).callStatic.batchSwapExactIn(
                 swaps, WETH, DAI, totalAmountIn, 0,
-                { from: nonAdmin }
+                { from: user }
             );
 
             const pool1Out = calcOutGivenIn(6, 5, 1200, 5, 0.5, swapFee);
@@ -385,9 +397,9 @@ describe('ExchangeProxy metaTx', async () => {
 
             const swapFee = fromWei(await pool1.getSwapFee());
             const maxIn = toWei('7');
-            const totalAmountIn = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactOut(
+            const totalAmountIn = await proxy.connect(userSigner).callStatic.batchSwapExactOut(
                 swaps, WETH, DAI, maxIn,
-                { from: nonAdmin },
+                { from: user },
             );
 
             const pool1In = calcInGivenOut(6, 5, 1200, 5, 100, swapFee);
@@ -438,10 +450,10 @@ describe('ExchangeProxy metaTx', async () => {
             const totalAmountIn = toWei('2');
             const swapFee = fromWei(await pool1.getSwapFee());
 
-            const totalAmountOut = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactIn(
+            const totalAmountOut = await proxy.connect(userSigner).callStatic.batchSwapExactIn(
                 swaps, ETH, DAI, totalAmountIn, toWei('0'),
                 {
-                  from: nonAdmin,
+                  from: user,
                   value: totalAmountIn
                 },
             );
@@ -494,9 +506,9 @@ describe('ExchangeProxy metaTx', async () => {
             const totalAmountIn = toWei('150');
             const swapFee = fromWei(await pool1.getSwapFee());
 
-            const totalAmountOut = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactIn(
+            const totalAmountOut = await proxy.connect(userSigner).callStatic.batchSwapExactIn(
                 swaps, DAI, ETH, totalAmountIn, toWei('0.5'),
-                { from: nonAdmin },
+                { from: user },
             );
 
             const pool1Out = calcOutGivenIn(1200, 5, 6, 5, 30, swapFee);
@@ -546,10 +558,10 @@ describe('ExchangeProxy metaTx', async () => {
 
             const swapFee = fromWei(await pool1.getSwapFee());
             const maxIn = toWei('7.5');
-            const totalAmountIn = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactOut(
+            const totalAmountIn = await proxy.connect(userSigner).callStatic.batchSwapExactOut(
                 swaps, ETH, DAI, maxIn,
                 {
-                  from: nonAdmin,
+                  from: user,
                   value: maxIn
                 },
             );
@@ -602,9 +614,9 @@ describe('ExchangeProxy metaTx', async () => {
             const swapFee = fromWei(await pool1.getSwapFee());
             const maxIn = toWei('750');
 
-            const totalAmountIn = await proxy.connect(nonAdminSigner).callStatic.batchSwapExactOut(
+            const totalAmountIn = await proxy.connect(userSigner).callStatic.batchSwapExactOut(
                 swaps, DAI, ETH, maxIn,
-                { from: nonAdmin },
+                { from: user },
             );
 
             const pool1In = calcInGivenOut(1200, 5, 6, 5, 0.5, swapFee);
