@@ -18,7 +18,7 @@ import "@nomiclabs/buidler/console.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/ownership/Ownable.sol";
 
-import "./EIP712MetaTransaction.sol";
+import "./lib/EIP712Base.sol";
 
 interface PoolInterface {
     function swapExactAmountIn(address, uint, address, uint, uint) external returns (uint, uint);
@@ -44,9 +44,21 @@ interface RegistryInterface {
     function getBestPoolsWithLimit(address, address, uint) external view returns (address[] memory);
 }
 
-contract ExchangeProxy is Ownable, EIP712MetaTransaction("ExchangeProxy", "1") {
+contract ExchangeProxy is Ownable, EIP712Base("ExchangeProxy", "1") {
 
     using SafeMath for uint256;
+
+    bytes32 private constant META_TRANSACTION_TYPEHASH = keccak256(bytes("MetaTransaction(uint256 nonce,address from,bytes functionSignature)"));
+
+    mapping(address => uint256) nonces;
+
+    struct MetaTransaction {
+      uint256 nonce;
+      address from;
+      bytes functionSignature;
+    }
+
+    event MetaTransactionExecuted(address userAddress, address payable relayerAddress, bytes functionSignature);
 
     struct Pool {
         address pool;
@@ -74,6 +86,7 @@ contract ExchangeProxy is Ownable, EIP712MetaTransaction("ExchangeProxy", "1") {
 
     constructor(address _weth) public {
         weth = TokenInterface(_weth);
+        // EIP712Base("ExchangeProxy", "1");
     }
 
     function setRegistry(address _registry) external onlyOwner {
@@ -639,4 +652,75 @@ contract ExchangeProxy is Ownable, EIP712MetaTransaction("ExchangeProxy", "1") {
     }
 
     function() external payable {}
+
+    // MetaTx
+    function msgSender() internal view returns(address sender) {
+        if(msg.sender == address(this)) {
+            bytes memory array = msg.data;
+            uint256 index = msg.data.length;
+            assembly {
+                // Load the 32 bytes word from memory with the address on the lower 20 bytes, and mask those.
+                sender := and(mload(add(array, index)), 0xffffffffffffffffffffffffffffffffffffffff)
+            }
+        } else {
+            sender = msg.sender;
+        }
+        return sender;
+    }
+
+    function executeMetaTransaction(
+        address userAddress,
+        bytes memory functionSignature,
+        bytes32 sigR,
+        bytes32 sigS,
+        uint8 sigV)
+      public payable returns(bytes memory) {
+
+        uint256 gasUsedTracker = gasleft();
+
+        MetaTransaction memory metaTx = MetaTransaction({
+            nonce: nonces[userAddress],
+            from: userAddress,
+            functionSignature: functionSignature
+        });
+
+        require(verify(userAddress, metaTx, sigR, sigS, sigV), "Signer and signature do not match");
+        // Append userAddress and relayer address at the end to extract it from calling context
+        (bool success, bytes memory returnData) = address(this).call(abi.encodePacked(functionSignature, userAddress));
+
+        require(success, "Signature OK BUT Function call not successfull");
+        nonces[userAddress] = nonces[userAddress].add(1);
+        emit MetaTransactionExecuted(userAddress, msg.sender, functionSignature);
+
+        // Compute the total gas used for the trade
+        gasUsedTracker = gasUsedTracker - gasleft(); // + _gasPayerRefund.gasOverhead;
+
+        // Based on the transaction gas price,
+        // the token exchange rate with ETH,
+        // and the total gas used for this transaction,
+        // we compute the total tokens to refund.
+        uint256 tokensToRefund = tx.gasprice * gasUsedTracker; //  * exchangeRate;
+
+        // Refunds the user that paid for this transaction gas.
+        require(weth.transferFrom(userAddress, msg.sender, tokensToRefund), "ERR_TRANSFER_FAILED");
+
+        return returnData;
+    }
+
+    function hashMetaTransaction(MetaTransaction memory metaTx) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+                META_TRANSACTION_TYPEHASH,
+                metaTx.nonce,
+                metaTx.from,
+                keccak256(metaTx.functionSignature)
+            ));
+    }
+
+    function getNonce(address user) public view returns(uint256 nonce) {
+        nonce = nonces[user];
+    }
+
+    function verify(address signer, MetaTransaction memory metaTx, bytes32 sigR, bytes32 sigS, uint8 sigV) internal view returns (bool) {
+        return signer == ecrecover(toTypedMessageHash(hashMetaTransaction(metaTx)), sigV, sigR, sigS);
+    }
 }
