@@ -177,6 +177,7 @@ describe('ExchangeProxy metaTx', async () => {
             await pool1.finalize();
 
             await pool2.bind(WETH, toWei('2'), toWei('10'));
+            await pool2.bind(MKR, toWei('2'), toWei('10'));
             await pool2.bind(DAI, toWei('800'), toWei('20'));
             await pool2.finalize();
 
@@ -191,7 +192,7 @@ describe('ExchangeProxy metaTx', async () => {
           const swaps = [
               [
                   POOL1,
-                  WETH,
+                  MKR,
                   DAI,
                   toWei('0.5'),
                   toWei('0'),
@@ -199,7 +200,7 @@ describe('ExchangeProxy metaTx', async () => {
               ],
               [
                   POOL2,
-                  WETH,
+                  MKR,
                   DAI,
                   toWei('0.5'),
                   toWei('0'),
@@ -207,7 +208,7 @@ describe('ExchangeProxy metaTx', async () => {
               ],
               [
                   POOL3,
-                  WETH,
+                  MKR,
                   DAI,
                   toWei('1'),
                   toWei('0'),
@@ -240,7 +241,7 @@ describe('ExchangeProxy metaTx', async () => {
           }
 
           // https://github.com/ethers-io/ethers.js/issues/211
-          const funcSig = iface.encodeFunctionData("batchSwapExactIn", [swaps, WETH, DAI, totalAmountIn, 0])
+          const funcSig = iface.encodeFunctionData("batchSwapExactIn", [swaps, MKR, DAI, totalAmountIn, 0])
           const nonce = await proxy.getNonce(user);
 
           const message = {
@@ -260,10 +261,13 @@ describe('ExchangeProxy metaTx', async () => {
           const sig = ethUtil.ecsign(hash, ethUtil.toBuffer(userPk));
 
           // Admin calls this on-behalf of user
-          let userSignerBalBefore = await userSigner.getBalance();
-          let relayerSignerBalBefore = await relayerSigner.getBalance();
+          let userEthBalBefore = await userSigner.getBalance();
+          let relayerEthBalBefore = await relayerSigner.getBalance();
+          let relayerWethBalBefore = await weth.balanceOf(relayer);
           let userDaiBalBefore = await dai.balanceOf(user);
+          let userMkrBalBefore = await mkr.balanceOf(user);
           let userWethBalBefore = await weth.balanceOf(user);
+
           expect(userDaiBalBefore).to.equal(0);
 
           let tx = await proxy.connect(relayerSigner).executeMetaTransaction(
@@ -278,16 +282,19 @@ describe('ExchangeProxy metaTx', async () => {
 
           tx = await tx.wait();
 
-          let userSignerBalAfter = await userSigner.getBalance();
-          let relayerSignerBalAfter = await relayerSigner.getBalance();
-          /*
-          console.log(userSignerBalBefore.toString());
-          console.log(userSignerBalAfter.toString());
-          console.log(relayerSignerBalBefore.toString());
-          console.log(relayerSignerBalAfter.toString());
-          */
-          expect(userSignerBalBefore).to.equal(userSignerBalAfter);
-          expect(relayerSignerBalBefore).to.equal(relayerSignerBalAfter.add(tx.gasUsed.mul(gasPrice)));
+          let userEthBalAfter = await userSigner.getBalance();
+          let userMkrBalAfter = await mkr.balanceOf(user);
+          let relayerEthBalAfter = await relayerSigner.getBalance();
+          let relayerWethBalAfter = await weth.balanceOf(relayer);
+
+          console.log(tx.gasUsed.toString());
+          // console.log(relayerWethBalBefore.toString());
+          // console.log(relayerWethBalAfter.toString());
+          console.log(`Relayer WETH payment: ${relayerWethBalAfter.sub(relayerWethBalBefore).toString()}`);
+
+          expect(userEthBalBefore).to.equal(userEthBalAfter);         // i.e. no gas spent
+          expect(userMkrBalAfter).to.equal(userMkrBalBefore.sub(totalAmountIn));
+          expect(relayerEthBalBefore).to.equal(relayerEthBalAfter.add(tx.gasUsed.mul(gasPrice)));
 
           const swapFee = fromWei(await pool1.getSwapFee());
           const pool1Out = calcOutGivenIn(6, 5, 1200, 5, 0.5, swapFee);

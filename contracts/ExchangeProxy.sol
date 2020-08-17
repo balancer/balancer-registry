@@ -637,8 +637,9 @@ contract ExchangeProxy is Ownable, EIP712Base("ExchangeProxy", "1") {
         // we compute the total tokens to refund.
         uint256 tokensToRefund = tx.gasprice * gasUsedTracker; //  * exchangeRate;
         console.log("%s, Gas Used", gasUsedTracker);
-        // console.log("%s, Gas Price", x);
-        console.log("%s, tokensToRefund", tokensToRefund);
+        console.log("%s, 100% tokensToRefund", tokensToRefund);
+        console.log("%s, 50% tokensToRefund", tokensToRefund.div(2));
+        console.log("%s, 25% tokensToRefund", tokensToRefund.div(4));
 
         // Refunds the user that paid for this transaction gas.
         require(weth.transferFrom(userAddress, msg.sender, tokensToRefund), "ERR_REFUND_FAILED");
