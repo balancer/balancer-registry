@@ -47,7 +47,7 @@ contract BRegistry {
     );
 
     uint private constant BONE = 10**18;
-    uint private constant MIN_SWAP_FEE = (3 * BONE) / 100;
+    uint private constant MAX_SWAP_FEE = (3 * BONE) / 100;
 
     mapping(bytes32 => SortedPools) private _pools;
     mapping(address => mapping(bytes32 => PoolPairInfo)) private _infos;
@@ -106,7 +106,7 @@ contract BRegistry {
         require(bfactory.isBPool(pool), "ERR_NOT_BPOOL");
 
         uint256 swapFee = IBPool(pool).getSwapFee();
-        require(swapFee <= MIN_SWAP_FEE, "ERR_FEE_TOO_HIGH");
+        require(swapFee <= MAX_SWAP_FEE, "ERR_FEE_TOO_HIGH");
 
         bytes32 key = _createKey(token1, token2);
         _pools[key].pools.add(pool);

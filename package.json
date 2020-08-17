@@ -21,7 +21,7 @@
     "ethereum-waffle": "^3.0.0",
     "ethers": "^5.0.3",
     "ts-node": "^8.10.2",
-    "typescript": "^3.9.6"
+    "typescript": "^3.9.7"
   },
   "dependencies": {
     "@balancer-labs/sor": "0.4.0-3",
