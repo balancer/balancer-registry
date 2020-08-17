@@ -187,6 +187,101 @@ describe('ExchangeProxy metaTx', async () => {
             await pool3.finalize();
         });
 
+        it('Should fail when user addr different from signer', async () => {
+
+          const swaps = [
+              [
+                  POOL1,
+                  MKR,
+                  DAI,
+                  toWei('0.5'),
+                  toWei('0'),
+                  MAX,
+              ],
+              [
+                  POOL2,
+                  MKR,
+                  DAI,
+                  toWei('0.5'),
+                  toWei('0'),
+                  MAX,
+              ],
+              [
+                  POOL3,
+                  MKR,
+                  DAI,
+                  toWei('1'),
+                  toWei('0'),
+                  MAX,
+              ],
+          ];
+          const totalAmountIn = toWei('2');
+          const artifact = require('./../artifacts/ExchangeProxy.json');
+          var iface = new ethers.utils.Interface(artifact.abi);
+
+          const types = {
+              EIP712Domain: [
+                  { name: 'name', type: 'string' },
+                  { name: 'version', type: 'string' },
+                  { name: 'chainId', type: 'uint256' },
+                  { name: 'verifyingContract', type: 'address' }
+              ],
+              MetaTransaction: [
+                { name: "nonce", type: "uint256" },
+                { name: "from", type: "address" },
+                { name: "functionSignature", type: "bytes" }
+              ]
+          }
+
+          const domain = {
+              name: 'ExchangeProxy',
+              version: '1',
+              chainId: 42,                // !!!!!!! THIS IS CURRENTLY HARDCODED IN CONTRACT
+              verifyingContract: PROXY
+          }
+
+          // https://github.com/ethers-io/ethers.js/issues/211
+          const funcSig = iface.encodeFunctionData("batchSwapExactIn", [swaps, MKR, DAI, totalAmountIn, 0])
+          const nonce = await proxy.getNonce(user);
+
+          const message = {
+              nonce: parseInt(nonce),
+              from: user,
+              functionSignature: funcSig
+          }
+
+          const hash = ethUtil.keccak256(
+                Buffer.concat([
+                    Buffer.from('1901', 'hex'),
+                    structHash(types, 'EIP712Domain', domain),
+                    structHash(types, 'MetaTransaction', message),
+                ]),
+            );
+
+          const sig = ethUtil.ecsign(hash, ethUtil.toBuffer(userPk));
+
+          // Admin calls this on-behalf of user
+          let userEthBalBefore = await userSigner.getBalance();
+          let relayerEthBalBefore = await relayerSigner.getBalance();
+          let relayerWethBalBefore = await weth.balanceOf(relayer);
+          let userDaiBalBefore = await dai.balanceOf(user);
+          let userMkrBalBefore = await mkr.balanceOf(user);
+          let userWethBalBefore = await weth.balanceOf(user);
+
+          expect(userDaiBalBefore).to.equal(0);
+
+          await expect(
+            proxy.connect(relayerSigner).executeMetaTransaction(
+                relayer,
+                funcSig,
+                ethUtil.bufferToHex(sig.r),
+                ethUtil.bufferToHex(sig.s),
+                sig.v)
+          ).to.be.revertedWith("ERR_SIGNATURE");
+
+        });
+
+
         it('testing', async () => {
 
           const swaps = [
@@ -318,328 +413,5 @@ describe('ExchangeProxy metaTx', async () => {
 
           assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
         })
-        /*
-        it('batchSwapExactIn dry', async () => {
-            const swaps = [
-                [
-                    POOL1,
-                    WETH,
-                    DAI,
-                    toWei('0.5'),
-                    toWei('0'),
-                    MAX,
-                ],
-                [
-                    POOL2,
-                    WETH,
-                    DAI,
-                    toWei('0.5'),
-                    toWei('0'),
-                    MAX,
-                ],
-                [
-                    POOL3,
-                    WETH,
-                    DAI,
-                    toWei('1'),
-                    toWei('0'),
-                    MAX,
-                ],
-            ];
-            const swapFee = fromWei(await pool1.getSwapFee());
-            const totalAmountIn = toWei('2');
-
-            const totalAmountOut = await proxy.connect(userSigner).callStatic.batchSwapExactIn(
-                swaps, WETH, DAI, totalAmountIn, 0,
-                { from: user }
-            );
-
-            const pool1Out = calcOutGivenIn(6, 5, 1200, 5, 0.5, swapFee);
-            const pool2Out = calcOutGivenIn(2, 10, 800, 20, 0.5, swapFee);
-            const pool3Out = calcOutGivenIn(15, 5, 2500, 5, 1, swapFee);
-
-            const expectedTotalOut = pool1Out.plus(pool2Out).plus(pool3Out);
-
-            const relDif = calcRelativeDiff(expectedTotalOut, Decimal(fromWei(totalAmountOut)));
-
-            if (verbose) {
-                console.log('batchSwapExactIn');
-                console.log(`expected: ${expectedTotalOut})`);
-                console.log(`actual  : ${fromWei(totalAmountOut)})`);
-                console.log(`relDif  : ${relDif})`);
-            }
-
-            assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
-
-        });
-
-        it('batchSwapExactOut dry', async () => {
-            const swaps = [
-                [
-                    POOL1,
-                    WETH,
-                    DAI,
-                    toWei('100'),   // swapAmount
-                    toWei('1'),     // limitReturnAmount
-                    MAX,
-                ],
-                [
-                    POOL2,
-                    WETH,
-                    DAI,
-                    toWei('100'),
-                    toWei('1'),
-                    MAX,
-                ],
-                [
-                    POOL3,
-                    WETH,
-                    DAI,
-                    toWei('500'),
-                    toWei('5'),
-                    MAX,
-                ],
-            ];
-
-            const swapFee = fromWei(await pool1.getSwapFee());
-            const maxIn = toWei('7');
-            const totalAmountIn = await proxy.connect(userSigner).callStatic.batchSwapExactOut(
-                swaps, WETH, DAI, maxIn,
-                { from: user },
-            );
-
-            const pool1In = calcInGivenOut(6, 5, 1200, 5, 100, swapFee);
-            const pool2In = calcInGivenOut(2, 10, 800, 20, 100, swapFee);
-            const pool3In = calcInGivenOut(15, 5, 2500, 5, 500, swapFee);
-
-            const expectedTotalIn = pool1In.plus(pool2In).plus(pool3In);
-
-            const relDif = calcRelativeDiff(expectedTotalIn, Decimal(fromWei(totalAmountIn)));
-            if (verbose) {
-                console.log('batchSwapExactOut');
-                console.log(`expected: ${expectedTotalIn})`);
-                console.log(`actual  : ${fromWei(totalAmountIn)})`);
-                console.log(`relDif  : ${relDif})`);
-            }
-
-            assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
-        });
-
-        it('batchEthInSwapExactIn dry', async () => {
-            const swaps = [
-                [
-                    POOL1,
-                    WETH,
-                    DAI,
-                    toWei('0.5'),
-                    toWei('0'),
-                    MAX,
-                ],
-                [
-                    POOL2,
-                    WETH,
-                    DAI,
-                    toWei('0.5'),
-                    toWei('0'),
-                    MAX,
-                ],
-                [
-                    POOL3,
-                    WETH,
-                    DAI,
-                    toWei('1'),
-                    toWei('0'),
-                    MAX,
-                ],
-            ];
-
-            const totalAmountIn = toWei('2');
-            const swapFee = fromWei(await pool1.getSwapFee());
-
-            const totalAmountOut = await proxy.connect(userSigner).callStatic.batchSwapExactIn(
-                swaps, ETH, DAI, totalAmountIn, toWei('0'),
-                {
-                  from: user,
-                  value: totalAmountIn
-                },
-            );
-
-            const pool1Out = calcOutGivenIn(6, 5, 1200, 5, 0.5, swapFee);
-            const pool2Out = calcOutGivenIn(2, 10, 800, 20, 0.5, swapFee);
-            const pool3Out = calcOutGivenIn(15, 5, 2500, 5, 1, swapFee);
-
-            const expectedTotalOut = pool1Out.plus(pool2Out).plus(pool3Out);
-
-            const relDif = calcRelativeDiff(expectedTotalOut, Decimal(fromWei(totalAmountOut)));
-            if (verbose) {
-                console.log('batchEthInSwapExactIn');
-                console.log(`expected: ${expectedTotalOut})`);
-                console.log(`actual  : ${fromWei(totalAmountOut)})`);
-                console.log(`relDif  : ${relDif})`);
-            }
-
-            assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
-        });
-
-        it('batchEthOutSwapExactIn dry', async () => {
-            const swaps = [
-                [
-                    POOL1,
-                    DAI,
-                    WETH,
-                    toWei('30'),
-                    toWei('0'),
-                    MAX,
-                ],
-                [
-                    POOL2,
-                    DAI,
-                    WETH,
-                    toWei('45'),
-                    toWei('0'),
-                    MAX,
-                ],
-                [
-                    POOL3,
-                    DAI,
-                    WETH,
-                    toWei('75'),
-                    toWei('0'),
-                    MAX,
-                ],
-            ];
-
-            const totalAmountIn = toWei('150');
-            const swapFee = fromWei(await pool1.getSwapFee());
-
-            const totalAmountOut = await proxy.connect(userSigner).callStatic.batchSwapExactIn(
-                swaps, DAI, ETH, totalAmountIn, toWei('0.5'),
-                { from: user },
-            );
-
-            const pool1Out = calcOutGivenIn(1200, 5, 6, 5, 30, swapFee);
-            const pool2Out = calcOutGivenIn(800, 20, 2, 10, 45, swapFee);
-            const pool3Out = calcOutGivenIn(2500, 5, 15, 5, 75, swapFee);
-
-            const expectedTotalOut = pool1Out.plus(pool2Out).plus(pool3Out);
-
-            const relDif = calcRelativeDiff(expectedTotalOut, Decimal(fromWei(totalAmountOut)));
-            if (verbose) {
-                console.log('batchEthOutSwapExactIn');
-                console.log(`expected: ${expectedTotalOut})`);
-                console.log(`actual  : ${fromWei(totalAmountOut)})`);
-                console.log(`relDif  : ${relDif})`);
-            }
-
-            assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
-        });
-
-        it('batchEthInSwapExactOut dry', async () => {
-            const swaps = [
-                [
-                    POOL1,
-                    WETH,
-                    DAI,
-                    toWei('100'),
-                    toWei('1'),
-                    MAX,
-                ],
-                [
-                    POOL2,
-                    WETH,
-                    DAI,
-                    toWei('100'),
-                    toWei('1'),
-                    MAX,
-                ],
-                [
-                    POOL3,
-                    WETH,
-                    DAI,
-                    toWei('500'),
-                    toWei('5'),
-                    MAX,
-                ],
-            ];
-
-            const swapFee = fromWei(await pool1.getSwapFee());
-            const maxIn = toWei('7.5');
-            const totalAmountIn = await proxy.connect(userSigner).callStatic.batchSwapExactOut(
-                swaps, ETH, DAI, maxIn,
-                {
-                  from: user,
-                  value: maxIn
-                },
-            );
-
-            const pool1In = calcInGivenOut(6, 5, 1200, 5, 100, swapFee);
-            const pool2In = calcInGivenOut(2, 10, 800, 20, 100, swapFee);
-            const pool3In = calcInGivenOut(15, 5, 2500, 5, 500, swapFee);
-
-            const expectedTotalIn = pool1In.plus(pool2In).plus(pool3In);
-
-            const relDif = calcRelativeDiff(expectedTotalIn, Decimal(fromWei(totalAmountIn)));
-            if (verbose) {
-                console.log('batchEthInSwapExactOut');
-                console.log(`expected: ${expectedTotalIn})`);
-                console.log(`actual  : ${fromWei(totalAmountIn)})`);
-                console.log(`relDif  : ${relDif})`);
-            }
-
-            assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
-        });
-
-        it('batchEthOutSwapExactOut dry', async () => {
-            const swaps = [
-                [
-                    POOL1,
-                    DAI,
-                    WETH,
-                    toWei('0.5'),
-                    toWei('150'),
-                    MAX,
-                ],
-                [
-                    POOL2,
-                    DAI,
-                    WETH,
-                    toWei('0.5'),
-                    toWei('150'),
-                    MAX,
-                ],
-                [
-                    POOL3,
-                    DAI,
-                    WETH,
-                    toWei('2.5'),
-                    toWei('550'),
-                    MAX,
-                ],
-            ];
-
-            const swapFee = fromWei(await pool1.getSwapFee());
-            const maxIn = toWei('750');
-
-            const totalAmountIn = await proxy.connect(userSigner).callStatic.batchSwapExactOut(
-                swaps, DAI, ETH, maxIn,
-                { from: user },
-            );
-
-            const pool1In = calcInGivenOut(1200, 5, 6, 5, 0.5, swapFee);
-            const pool2In = calcInGivenOut(800, 20, 2, 10, 0.5, swapFee);
-            const pool3In = calcInGivenOut(2500, 5, 15, 5, 2.5, swapFee);
-
-            const expectedTotalIn = pool1In.plus(pool2In).plus(pool3In);
-
-            const relDif = calcRelativeDiff(expectedTotalIn, Decimal(fromWei(totalAmountIn)));
-            if (verbose) {
-                console.log('batchEthOutSwapExactOut');
-                console.log(`expected: ${expectedTotalIn})`);
-                console.log(`actual  : ${fromWei(totalAmountIn)})`);
-                console.log(`relDif  : ${relDif})`);
-            }
-
-            assert.isAtMost(relDif.toNumber(), (errorDelta * swaps.length));
-        });
-        */
+        
 });
