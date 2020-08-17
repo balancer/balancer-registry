@@ -103,7 +103,6 @@ contract ExchangeProxy is Ownable, EIP712Base("ExchangeProxy", "1") {
         returns (uint totalAmountOut)
     {
         transferFromAll(tokenIn, totalAmountIn);
-
         for (uint i = 0; i < swaps.length; i++) {
             Swap memory swap = swaps[i];
             TokenInterface SwapTokenIn = TokenInterface(swap.tokenIn);
@@ -123,7 +122,6 @@ contract ExchangeProxy is Ownable, EIP712Base("ExchangeProxy", "1") {
                                     );
             totalAmountOut = tokenAmountOut.add(totalAmountOut);
         }
-
         require(totalAmountOut >= minTotalAmountOut, "ERR_LIMIT_OUT");
 
         transferAll(tokenOut, totalAmountOut);
@@ -548,7 +546,7 @@ contract ExchangeProxy is Ownable, EIP712Base("ExchangeProxy", "1") {
         if (isETH(token)) {
             weth.deposit.value(msg.value)();
         } else {
-            require(token.transferFrom(msg.sender, address(this), amount), "ERR_TRANSFER_FAILED");
+            require(token.transferFrom(msgSender(), address(this), amount), "ERR_TRANSFER_FAILED");
         }
     }
 
@@ -567,10 +565,10 @@ contract ExchangeProxy is Ownable, EIP712Base("ExchangeProxy", "1") {
 
         if (isETH(token)) {
             weth.withdraw(amount);
-            (bool xfer,) = msg.sender.call.value(amount)("");
+            (bool xfer,) = msgSender().call.value(amount)("");
             require(xfer, "ERR_ETH_FAILED");
         } else {
-            require(token.transfer(msg.sender, amount), "ERR_TRANSFER_FAILED");
+            require(token.transfer(msgSender(), amount), "ERR_TRANSFER_FAILED");
         }
     }
 

@@ -114,7 +114,6 @@ describe('ExchangeProxy metaTx', async () => {
             userPk = '0x56d6ec847fd896d97961ec83ac0fddb9f40ad0f72f77704f2d14051a9ae81aa0';
 
             const ExchangeProxy = await ethers.getContractFactory("ExchangeProxy");
-            const SOR = await ethers.getContractFactory("SmartOrderRouter");
             const BFactory = await ethers.getContractFactory('BFactory');
             const BPool = await ethers.getContractFactory('BPool');
             const Weth9 = await ethers.getContractFactory('WETH9');
@@ -136,7 +135,7 @@ describe('ExchangeProxy metaTx', async () => {
 
             await weth.deposit({ value: toWei('25') });
             await dai.mint(relayer, toWei('10000'));
-            await mkr.mint(relayer, toWei('20'));
+            await mkr.mint(relayer, toWei('200'));
 
             await weth.connect(userSigner).deposit({ from: user, value: toWei('25') });
             // await dai.mint(user, toWei('10000'));
@@ -174,7 +173,7 @@ describe('ExchangeProxy metaTx', async () => {
 
             await pool1.bind(WETH, toWei('6'), toWei('5'));
             await pool1.bind(DAI, toWei('1200'), toWei('5'));
-            await pool1.bind(MKR, toWei('2'), toWei('5'));
+            await pool1.bind(MKR, toWei('6'), toWei('5'));
             await pool1.finalize();
 
             await pool2.bind(WETH, toWei('2'), toWei('10'));
@@ -183,7 +182,7 @@ describe('ExchangeProxy metaTx', async () => {
 
             await pool3.bind(WETH, toWei('15'), toWei('5'));
             await pool3.bind(DAI, toWei('2500'), toWei('5'));
-            await pool3.bind(MKR, toWei('5'), toWei('5'));
+            await pool3.bind(MKR, toWei('15'), toWei('5'));
             await pool3.finalize();
         });
 
