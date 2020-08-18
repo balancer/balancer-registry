@@ -351,10 +351,18 @@ contract ExchangeProxy is Ownable {
         }
 
         uint[] memory bestInputAmounts = new uint[](pools.length);
+        uint totalInputAmount;
         for (uint i = 0; i < pools.length; i++) {
             bestInputAmounts[i] = swapAmount.mul(pools[i].effectiveLiquidity).div(sumEffectiveLiquidity);
+            totalInputAmount = totalInputAmount.add(bestInputAmounts[i]);
         }
-        bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
+
+        if (totalInputAmount < swapAmount) {
+            bestInputAmounts[0] = bestInputAmounts[0].add(swapAmount.sub(totalInputAmount));
+        } else {
+            bestInputAmounts[0] = bestInputAmounts[0].sub(totalInputAmount.sub(swapAmount));
+        }
+
         swaps = new Swap[](pools.length);
 
         for (uint i = 0; i < pools.length; i++) {
@@ -392,10 +400,18 @@ contract ExchangeProxy is Ownable {
         }
 
         uint[] memory bestInputAmounts = new uint[](pools.length);
+        uint totalInputAmount;
         for (uint i = 0; i < pools.length; i++) {
             bestInputAmounts[i] = swapAmount.mul(pools[i].effectiveLiquidity).div(sumEffectiveLiquidity);
+            totalInputAmount = totalInputAmount.add(bestInputAmounts[i]);
         }
-        bestInputAmounts = calcDust(bestInputAmounts, swapAmount);
+        
+         if (totalInputAmount < swapAmount) {
+            bestInputAmounts[0] = bestInputAmounts[0].add(swapAmount.sub(totalInputAmount));
+        } else {
+            bestInputAmounts[0] = bestInputAmounts[0].sub(totalInputAmount.sub(swapAmount));
+        }
+
         swaps = new Swap[](pools.length);
 
         for (uint i = 0; i < pools.length; i++) {
@@ -414,30 +430,12 @@ contract ExchangeProxy is Ownable {
         return (swaps, totalOutput);
     }
 
-    function calcDust(
-        uint[] memory bestInputAmounts,
-        uint swapAmount
-    )
-        public pure
-        returns (uint[] memory)
-    {
-        uint sumBestInputAmounts = sum(bestInputAmounts);
-
-        // Add dust to the first swapAmount (which is always the greater) if rounding error is negative
-        if (sumBestInputAmounts < swapAmount) {
-            bestInputAmounts[0] = bestInputAmounts[0].add(swapAmount.sub(sumBestInputAmounts));
-        } else {
-            bestInputAmounts[0] = bestInputAmounts[0].sub(sumBestInputAmounts.sub(swapAmount));
-        }
-        return bestInputAmounts;
-    }
-
     function getPoolData(
         address tokenIn,
         address tokenOut,
         address poolAddress
     )
-        public view
+        internal view
         returns (Pool memory)
     {
         PoolInterface pool = PoolInterface(poolAddress);
@@ -470,7 +468,7 @@ contract ExchangeProxy is Ownable {
         uint tokenBalanceOut,
         uint tokenWeightOut
     )
-        public pure
+        internal pure
         returns (uint effectiveLiquidity)
     {
 
@@ -487,7 +485,7 @@ contract ExchangeProxy is Ownable {
         uint[] memory bestInputAmounts,
         Pool[] memory bestPools
     )
-        public pure
+        internal pure
         returns (uint totalOutput)
     {
         totalOutput = 0;
@@ -510,7 +508,7 @@ contract ExchangeProxy is Ownable {
         uint[] memory bestInputAmounts,
         Pool[] memory bestPools
     )
-        public pure
+        internal pure
         returns (uint totalOutput)
     {
         totalOutput = 0;
@@ -529,7 +527,7 @@ contract ExchangeProxy is Ownable {
         return totalOutput;
     }
 
-    function transferFromAll(TokenInterface token, uint256 amount) internal returns(bool) {
+    function transferFromAll(TokenInterface token, uint amount) internal returns(bool) {
         if (isETH(token)) {
             weth.deposit.value(msg.value)();
         } else {
@@ -537,7 +535,7 @@ contract ExchangeProxy is Ownable {
         }
     }
 
-    function getBalance(TokenInterface token) internal view returns (uint256) {
+    function getBalance(TokenInterface token) internal view returns (uint) {
         if (isETH(token)) {
             return address(this).balance;
         } else {
@@ -545,7 +543,7 @@ contract ExchangeProxy is Ownable {
         }
     }
 
-    function transferAll(TokenInterface token, uint256 amount) internal returns(bool) {
+    function transferAll(TokenInterface token, uint amount) internal returns(bool) {
         if (amount == 0) {
             return true;
         }
@@ -561,17 +559,6 @@ contract ExchangeProxy is Ownable {
 
     function isETH(TokenInterface token) internal pure returns(bool) {
         return (address(token) == ETH_ADDRESS);
-    }
-
-    function sum(uint[] memory _data)
-      internal pure
-      returns (uint total)
-    {
-        for (uint i = 0; i < _data.length; ++i) {
-            assembly {
-                total := add(total, mload(add(add(_data, 0x20), mul(i, 0x20))))
-            }
-        }
     }
 
     function() external payable {}
