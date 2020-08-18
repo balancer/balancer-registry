@@ -3,3 +3,8 @@ node_modules
 #Buidler files
 cache
 artifacts
+
+.env
+.DS_Store
+
+dist
