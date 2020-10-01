@@ -405,7 +405,7 @@ contract ExchangeProxy is Ownable {
             bestInputAmounts[i] = swapAmount.mul(pools[i].effectiveLiquidity).div(sumEffectiveLiquidity);
             totalInputAmount = totalInputAmount.add(bestInputAmounts[i]);
         }
-        
+
          if (totalInputAmount < swapAmount) {
             bestInputAmounts[0] = bestInputAmounts[0].add(swapAmount.sub(totalInputAmount));
         } else {
@@ -473,7 +473,7 @@ contract ExchangeProxy is Ownable {
     {
 
         // Bo * wi/(wi+wo)
-        effectiveLiquidity = 
+        effectiveLiquidity =
             tokenWeightIn.mul(BONE).div(
                 tokenWeightOut.add(tokenWeightIn)
             ).mul(tokenBalanceOut).div(BONE);
@@ -537,7 +537,7 @@ contract ExchangeProxy is Ownable {
 
     function getBalance(TokenInterface token) internal view returns (uint) {
         if (isETH(token)) {
-            return address(this).balance;
+            return weth.balanceOf(address(this));
         } else {
             return token.balanceOf(address(this));
         }
