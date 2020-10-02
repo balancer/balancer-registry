@@ -16,7 +16,7 @@ if(MAINNET){
   PROVIDER = `https://mainnet.infura.io/v3/${process.env.INFURA}`;
   WALLET_KEY = `${process.env.KEYMAIN}`;
   SUBGRAPH_URL = 'https://api.thegraph.com/subgraphs/name/balancer-labs/balancer';
-  REGISTRY = '0xE57e9f9F71D847E06b2023F5d215Eb7e1aE3CD67';
+  REGISTRY = '0x373610EC3949a13586121b642d8c03e34A926cAa';
 }else{
   PROVIDER = `https://kovan.infura.io/v3/${process.env.INFURA}`;
   WALLET_KEY = `${process.env.KEYKOVAN}`;
@@ -27,6 +27,7 @@ if(MAINNET){
 // Pairs from top 50 pools
 let pairArray: Pair[];
 pairArray = [
+  /*
   {token1: '0xe2f2a5c287993345a840db3b0845fbc70f5935a5', token2: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'},
   {token1: '0xe2f2a5c287993345a840db3b0845fbc70f5935a5', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
   {token1: '0x80fb784b7ed66730e8b1dbd9820afd29931aab03', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
@@ -47,6 +48,27 @@ pairArray = [
   {token1: '0x57ab1ec28d129707052df4df418d58a2d46d5f51', token2: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'},
   {token1: '0x93ed3fbe21207ec2e8f2d3c3de6e058cb73bc04d', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
   {token1: '0x04fa0d235c4abf4bcf4787af4cf447de572ef828', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'}
+  */
+  {token1: '0xba100000625a3754423978a60c9317c58a424e3d', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0xa1d0e215a23d7030842fc67ce582a6afa3ccab83', token2: '0x6b175474e89094c44da98b954eedeac495271d0f'},
+  {token1: '0xe2f2a5c287993345a840db3b0845fbc70f5935a5', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0xe2f2a5c287993345a840db3b0845fbc70f5935a5', token2: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'},
+  {token1: '0x80fb784b7ed66730e8b1dbd9820afd29931aab03', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x0d438f3b5175bebc262bf23753c1e53d03432bde', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0xdf5e0e81dff6faf3a7e52ba697820c5e32d806a8', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x0bc529c00c6401aef6d220be8c6ea1667f6ad93e', token2: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'},
+  {token1: '0x0bc529c00c6401aef6d220be8c6ea1667f6ad93e', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x6b175474e89094c44da98b954eedeac495271d0f', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x45f24baeef268bb6d63aee5129015d69702bcdfa', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x408e41876cccdc0f92210600ef50372656052a38', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x56d811088235f11c8920698a204a5010a788f4b3', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x476c5e26a75bd202a9683ffd34359c0cc15be0ff', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x93ed3fbe21207ec2e8f2d3c3de6e058cb73bc04d', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'},
+  {token1: '0x5e74c9036fb86bd7ecdcb084a0673efc32ea31cb', token2: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'}
 ];
 /* KOVAN TEST
 pairArray = [
@@ -141,6 +163,8 @@ export function calculateLiquidity(
 }
 
 function isPairPoolsCurrent(NewPools: string[], OnChainPools: string[]){
+    // console.log(NewPools);
+    // console.log(OnChainPools);
     if(NewPools.length === 0)
         return true;
 
@@ -173,6 +197,7 @@ async function updateOnChainPools(Pools: string[], Token1: string, Token2: strin
     let onChainPools = await registry.getBestPoolsWithLimit(Token1, Token2, 3);
 
     let poolCheck = isPairPoolsCurrent(Pools, onChainPools);
+    console.log(`Is Current: ${poolCheck}`);
 
     if(poolCheck && !estimate){
       console.log(`On-chain List Already Up To Date:`);
@@ -181,11 +206,18 @@ async function updateOnChainPools(Pools: string[], Token1: string, Token2: strin
     }
 
     if(!estimate){
-      let tx = await contractWithSigner.addPools(Pools, Token1, Token2);
-      console.log(`Waiting For Tx: ${tx.hash}`);
+      let tx = await contractWithSigner.addPools(Pools, Token1, Token2, {
+        gasPrice: 0
+        // gasPrice: 70000000000
+      });
+      console.log(`Waiting For AddPools Tx: ${tx.hash}`);
       await tx.wait();
 
-      tx = await contractWithSigner.sortPools([Token1, Token2], 3);
+      tx = await contractWithSigner.sortPools([Token1, Token2], 3, {
+        // gasPrice: 70000000000
+        gasPrice: 0
+      });
+      console.log(`Waiting For Sort Tx: ${tx.hash}`);
       await tx.wait();
 
       onChainPools = await registry.getBestPoolsWithLimit(Token1, Token2, 3);
@@ -275,6 +307,7 @@ async function run(estimate=false) {
   // Order pools by liquidity and select top 3
   // Compare to top 3 pools on Registry and update if different
   for(let i = 0;i < pairArray.length;i++){
+  // for(let i = 0;i < 2;i++){
     let pair: Pair = pairArray[i];
     pair.token1 = pair.token1.toLowerCase();
     pair.token2 = pair.token2.toLowerCase();
