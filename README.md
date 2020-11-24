@@ -76,7 +76,7 @@ View function that calculates most optimal swaps (exactIn swap type) across a ma
 
 `viewSplitExactOut(address tokenIn, address tokenOut, uint swapAmount, uint nPools)`
 
-View function that calculates most optimal swaps (exactOut swap type) across a max of nPools. Returns an array of Swaps and the total amount in for swap.
+View function that calculates most optimal swaps (exactOut swap type) across a max of nPools. Returns an array of Swaps and the total amount in for swap. (! Please be aware the return parameter "totalOutput" in the contract is a misnomer and actually represents totalInput !)
 
 > **smartSwap functions**
 
