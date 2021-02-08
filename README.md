@@ -101,7 +101,8 @@ $ npx buidler test
 
 Deploy scripts:
 
-Add .env variable to root and include: INFURA=your_api_key and KEYKOVAN/KEYMAIN=deploy_key 
+Add .env variable to root and include: INFURA=your_api_key and KEYKOVAN/KEYRINKEBY/KEYMAIN=deploy_key 
 
 * Mainnet: `$ npx buidler run --network main  deploy-script-mainnet.js`
 * Kovan: `$ npx buidler run --network kovan deploy-script-kovan.js`
+* Rinkeby: `$ npx buidler run --network rinkeby deploy-script-rinkeby.js`
