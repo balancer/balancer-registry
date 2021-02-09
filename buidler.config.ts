@@ -35,6 +35,11 @@ const config: BuidlerConfig = {
       accounts: [`${process.env.KEYKOVAN}`],
       gasPrice: 70000000000
     },
+    rinkeby: {
+      url: `https://rinkeby.infura.io/v3/${process.env.INFURA}`,
+      accounts: [`${process.env.KEYRINKEBY}`],
+      gasPrice: 70000000000
+    },
     main: {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA}`,
       accounts: [`${process.env.KEYMAIN}`],
